@@ -1,0 +1,344 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="Bitcoin on-chain metrics dashboard: 200W MA, RSI, MVRV Z-Score, Puell Multiple, Log Regression, Risk Score — free APIs, no backend.">
+  <title>₿ Bitcoin Metrics Dashboard</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>₿</text></svg>">
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+
+<!-- ── Signature risk-colour strip (top 3px glow bar) ─────────────────── -->
+<div id="risk-strip"></div>
+
+<!-- ── Loader ─────────────────────────────────────────────────────────── -->
+<div id="loader">
+  <div class="loader-btc">₿</div>
+  <div class="loader-bar"><div class="loader-fill"></div></div>
+  <div class="loader-text">Loading Bitcoin metrics…</div>
+</div>
+
+<!-- ── App (hidden until data ready) ─────────────────────────────────── -->
+<div id="app" style="display:none">
+
+  <!-- HEADER -->
+  <header>
+    <div class="hdr-brand">
+      <span class="hdr-symbol">₿</span>
+      <span class="hdr-title">Bitcoin Metrics</span>
+    </div>
+
+    <div class="hdr-price-group">
+      <span id="hdr-price" class="hdr-price">—</span>
+      <span id="hdr-change" class="hdr-change">—</span>
+      <div class="hdr-meta">
+        <span>MCap <strong id="hdr-mcap">—</strong></span>
+        <span>Vol 24h <strong id="hdr-vol">—</strong></span>
+      </div>
+    </div>
+
+    <div id="status-msg" class="hdr-status status-ok">Initialising…</div>
+  </header>
+
+  <!-- RISK BANNER -->
+  <div class="risk-banner">
+    <div class="risk-score-block">
+      <div class="risk-score-label">Risk Score</div>
+      <div id="risk-score-val" style="color:#94a3b8">—</div>
+      <div id="risk-label" style="color:#94a3b8">/ 10</div>
+    </div>
+
+    <div class="risk-gauge-block">
+      <div class="risk-gauge-track">
+        <div id="risk-gauge-inner"></div>
+      </div>
+      <div class="risk-gauge-labels">
+        <span>0 — Strong Buy</span>
+        <span>5 — Neutral</span>
+        <span>10 — Strong Sell</span>
+      </div>
+    </div>
+
+    <div class="risk-dca-block">
+      <div id="risk-action" style="color:#8891a8">Calculating…</div>
+      <div id="risk-alloc"></div>
+    </div>
+  </div>
+
+  <!-- NAV -->
+  <nav class="chart-nav" aria-label="Metric sections">
+    <button class="nav-btn active" data-section="dashboard">Dashboard</button>
+    <button class="nav-btn" data-section="ma200w">200W MA</button>
+    <button class="nav-btn" data-section="rsi">Weekly RSI</button>
+    <button class="nav-btn" data-section="mvrv">MVRV Z-Score</button>
+    <button class="nav-btn" data-section="puell">Puell Multiple</button>
+    <button class="nav-btn" data-section="logregr">Log Regression</button>
+    <button class="nav-btn" data-section="picycle">Pi Cycle</button>
+    <button class="nav-btn" data-section="risk">Risk &amp; DCA</button>
+  </nav>
+
+  <!-- MAIN -->
+  <main>
+
+    <!-- ── DASHBOARD ──────────────────────────────────────────────────── -->
+    <section id="sec-dashboard" class="section active">
+
+      <!-- Halving countdown -->
+      <div class="halving-strip" id="halving-info">Loading halving countdown…</div>
+
+      <!-- Metric cards -->
+      <div class="cards-grid">
+        <div class="metric-card">
+          <div class="card-top"><span class="card-name">200W MA</span><span class="card-dot neutral" id="card-dot-ma200w"></span></div>
+          <div class="card-value" id="card-val-ma200w">—</div>
+          <div class="card-detail" id="card-detail-ma200w">Loading…</div>
+        </div>
+        <div class="metric-card">
+          <div class="card-top"><span class="card-name">Weekly RSI</span><span class="card-dot neutral" id="card-dot-rsi"></span></div>
+          <div class="card-value" id="card-val-rsi">—</div>
+          <div class="card-detail" id="card-detail-rsi">Loading…</div>
+        </div>
+        <div class="metric-card">
+          <div class="card-top"><span class="card-name">MVRV Z-Score</span><span class="card-dot neutral" id="card-dot-mvrv"></span></div>
+          <div class="card-value" id="card-val-mvrv">—</div>
+          <div class="card-detail" id="card-detail-mvrv">Loading…</div>
+        </div>
+        <div class="metric-card">
+          <div class="card-top"><span class="card-name">Puell Multiple</span><span class="card-dot neutral" id="card-dot-puell"></span></div>
+          <div class="card-value" id="card-val-puell">—</div>
+          <div class="card-detail" id="card-detail-puell">Loading…</div>
+        </div>
+        <div class="metric-card">
+          <div class="card-top"><span class="card-name">Log Regr. %ile</span><span class="card-dot neutral" id="card-dot-logregr"></span></div>
+          <div class="card-value" id="card-val-logregr">—</div>
+          <div class="card-detail" id="card-detail-logregr">Loading…</div>
+        </div>
+        <div class="metric-card">
+          <div class="card-top"><span class="card-name">Fear &amp; Greed</span><span class="card-dot neutral" id="card-dot-fear"></span></div>
+          <div class="card-value" id="card-val-fear">—</div>
+          <div class="card-detail" id="card-detail-fear">Loading…</div>
+        </div>
+      </div>
+
+      <!-- Overview chart -->
+      <div class="chart-wrap">
+        <div class="chart-head">
+          <div class="chart-title">Price + 200 Week Moving Average</div>
+          <div class="chart-desc">Full BTC price history on a log scale. The 200 Week MA (green) has never been breached on a monthly close and marks historical cycle lows.</div>
+        </div>
+        <div class="chart-area"><canvas id="chart-overview"></canvas></div>
+        <div class="chart-legend">
+          <div class="legend-item"><div class="legend-swatch" style="background:#f7931a"></div>BTC Price</div>
+          <div class="legend-item"><div class="legend-swatch" style="background:#10b981"></div>200W MA</div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ── 200 WEEK MA ────────────────────────────────────────────────── -->
+    <section id="sec-ma200w" class="section">
+      <div class="chart-wrap">
+        <div class="chart-head">
+          <div class="chart-title">200 Week Moving Average Heatmap</div>
+          <div class="chart-desc">Price coloured by its multiple of the 200W MA. Green = below or near MA (accumulation). Orange/Red = highly extended above MA (distribution). The ×5 dashed line has historically been near cycle tops.</div>
+        </div>
+        <div class="chart-area"><canvas id="chart-ma200w"></canvas></div>
+        <div class="chart-legend">
+          <div class="legend-item"><div class="legend-swatch" style="background:#10b981"></div>&lt; 200W MA</div>
+          <div class="legend-item"><div class="legend-swatch" style="background:#f59e0b"></div>1–2× MA</div>
+          <div class="legend-item"><div class="legend-swatch" style="background:#f97316"></div>2–3.5× MA</div>
+          <div class="legend-item"><div class="legend-swatch" style="background:#ef4444"></div>&gt; 3.5× MA</div>
+          <div class="legend-item"><div class="legend-dash" style="border-color:#ef444466"></div>200W MA ×5</div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ── WEEKLY RSI ─────────────────────────────────────────────────── -->
+    <section id="sec-rsi" class="section">
+      <div class="chart-wrap">
+        <div class="chart-head">
+          <div class="chart-title">Weekly RSI (14-period)</div>
+          <div class="chart-desc">Relative Strength Index on the weekly timeframe using Wilder's smoothing. RSI above 70 has historically coincided with market tops; below 30 with bottoms. Extreme readings (&gt;80 or &lt;20) are rare and highly significant.</div>
+        </div>
+        <div class="chart-area"><canvas id="chart-rsi"></canvas></div>
+        <div class="chart-legend">
+          <div class="legend-item"><div class="legend-swatch" style="background:#ef444433;height:10px;width:20px"></div>Sell Zone &gt;70</div>
+          <div class="legend-item"><div class="legend-swatch" style="background:#10b98133;height:10px;width:20px"></div>Buy Zone &lt;30</div>
+          <div class="legend-item"><div class="legend-swatch" style="background:#f7931a"></div>Weekly RSI</div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ── MVRV Z-SCORE ───────────────────────────────────────────────── -->
+    <section id="sec-mvrv" class="section">
+      <div class="chart-wrap">
+        <div class="chart-head">
+          <div class="chart-title">MVRV Z-Score</div>
+          <div class="chart-desc">Market Value to Realized Value Z-Score = (Market Cap − Realized Cap) / σ(Market Cap). Values above 6 have coincided with every cycle top. Values below 0 (price below realized value) are historically the best accumulation opportunities.</div>
+        </div>
+        <div class="chart-area"><canvas id="chart-mvrv"></canvas></div>
+        <div class="chart-legend">
+          <div class="legend-item"><div class="legend-swatch" style="background:#ef444433;height:10px;width:20px"></div>Sell Zone &gt;6</div>
+          <div class="legend-item"><div class="legend-swatch" style="background:#10b98133;height:10px;width:20px"></div>Buy Zone &lt;0</div>
+          <div class="legend-item"><div class="legend-swatch" style="background:#3b82f6"></div>MVRV Z-Score</div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ── PUELL MULTIPLE ─────────────────────────────────────────────── -->
+    <section id="sec-puell" class="section">
+      <div class="chart-wrap">
+        <div class="chart-head">
+          <div class="chart-title">Puell Multiple</div>
+          <div class="chart-desc">Daily miner revenue in USD ÷ 365-day MA of daily miner revenue. Miners are the natural sellers of BTC. High Puell values (&gt;4) mean miners are earning unusually high revenue — historically a sell signal. Low values (&lt;0.5) indicate miner capitulation and accumulation opportunities.</div>
+        </div>
+        <div class="chart-area"><canvas id="chart-puell"></canvas></div>
+        <div class="chart-legend">
+          <div class="legend-item"><div class="legend-swatch" style="background:#ef444433;height:10px;width:20px"></div>Sell Zone &gt;4</div>
+          <div class="legend-item"><div class="legend-swatch" style="background:#10b98133;height:10px;width:20px"></div>Buy Zone &lt;0.5</div>
+          <div class="legend-item"><div class="legend-swatch" style="background:#8b5cf6"></div>Puell Multiple</div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ── LOG REGRESSION ────────────────────────────────────────────── -->
+    <section id="sec-logregr" class="section">
+      <div class="chart-wrap">
+        <div class="chart-head">
+          <div class="chart-title">Logarithmic Regression + Quantile Fan</div>
+          <div class="chart-desc">Power-law regression fit on log₁₀(price) vs log₁₀(days since genesis). Quantile bands show the 10th, 25th, 50th, 75th, and 90th percentile of historical price relative to regression. Price near the 90th percentile = historically overvalued. Near the 10th = historically undervalued.</div>
+        </div>
+        <div class="chart-area"><canvas id="chart-logregr"></canvas></div>
+        <div class="chart-legend">
+          <div class="legend-item"><div class="legend-swatch" style="background:#f7931a"></div>BTC Price</div>
+          <div class="legend-item"><div class="legend-swatch" style="background:#10b981"></div>10th %ile</div>
+          <div class="legend-item"><div class="legend-swatch" style="background:#34d399"></div>25th %ile</div>
+          <div class="legend-item"><div class="legend-swatch" style="background:#f7931a"></div>Median</div>
+          <div class="legend-item"><div class="legend-swatch" style="background:#f97316"></div>75th %ile</div>
+          <div class="legend-item"><div class="legend-swatch" style="background:#ef4444"></div>90th %ile</div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ── PI CYCLE TOP ───────────────────────────────────────────────── -->
+    <section id="sec-picycle" class="section">
+      <div class="chart-wrap">
+        <div class="chart-head">
+          <div class="chart-title">Pi Cycle Top Indicator</div>
+          <div class="chart-desc">When the 111-day MA crosses above the 2× 350-day MA, it has historically marked BTC cycle tops to within a few days. Currently there is no crossover, the 350×2 line acts as overhead resistance during bull markets.</div>
+        </div>
+        <div class="chart-area"><canvas id="chart-picycle"></canvas></div>
+        <div class="chart-legend">
+          <div class="legend-item"><div class="legend-swatch" style="background:#f7931a"></div>BTC Price</div>
+          <div class="legend-item"><div class="legend-swatch" style="background:#10b981"></div>111 DMA</div>
+          <div class="legend-item"><div class="legend-swatch" style="background:#ef4444"></div>350 DMA × 2</div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ── RISK & DCA ─────────────────────────────────────────────────── -->
+    <section id="sec-risk" class="section">
+      <div class="chart-wrap">
+        <div class="chart-head">
+          <div class="chart-title">Composite Risk Score (Historical)</div>
+          <div class="chart-desc">Weighted composite of 200W MA multiple (20%), weekly RSI (15%), MVRV Z-Score (25%), Puell Multiple (20%), log regression percentile (15%), and Fear &amp; Greed (5%). Score 0 = maximum buy opportunity. Score 10 = maximum sell signal.</div>
+        </div>
+        <div class="chart-area"><canvas id="chart-risk"></canvas></div>
+        <div class="chart-legend">
+          <div class="legend-item"><div class="legend-swatch" style="background:#10b981;height:10px;width:20px"></div>Buy Zone 0–4</div>
+          <div class="legend-item"><div class="legend-swatch" style="background:#94a3b8;height:10px;width:20px"></div>Neutral 4–6</div>
+          <div class="legend-item"><div class="legend-swatch" style="background:#ef4444;height:10px;width:20px"></div>Sell Zone 6–10</div>
+          <div class="legend-item"><div class="legend-swatch" style="background:#f7931a44"></div>BTC Price (log, left axis)</div>
+        </div>
+      </div>
+
+      <!-- DCA allocation table -->
+      <div class="dca-section">
+        <div class="dca-title">DCA Allocation Guide</div>
+        <div class="dca-grid">
+          <!-- header -->
+          <div class="dca-header">
+            <div class="dca-cell">Score</div>
+            <div class="dca-cell">Signal</div>
+            <div class="dca-cell">Action</div>
+            <div class="dca-cell">DCA Adj.</div>
+          </div>
+          <!-- rows populated by JS -->
+          <div class="dca-row" data-min="0" data-max="2">
+            <div class="dca-cell dca-score">0 – 2</div>
+            <div class="dca-cell dca-signal" style="color:#10b981">Strong Buy</div>
+            <div class="dca-cell dca-act">Accumulate heavily</div>
+            <div class="dca-cell dca-alloc" style="color:#10b981">+200%</div>
+          </div>
+          <div class="dca-row" data-min="2" data-max="3">
+            <div class="dca-cell dca-score">2 – 3</div>
+            <div class="dca-cell dca-signal" style="color:#34d399">Buy</div>
+            <div class="dca-cell dca-act">Increase DCA size</div>
+            <div class="dca-cell dca-alloc" style="color:#34d399">+150%</div>
+          </div>
+          <div class="dca-row" data-min="3" data-max="4">
+            <div class="dca-cell dca-score">3 – 4</div>
+            <div class="dca-cell dca-signal" style="color:#6ee7b7">Soft Buy</div>
+            <div class="dca-cell dca-act">Normal DCA</div>
+            <div class="dca-cell dca-alloc" style="color:#6ee7b7">+100%</div>
+          </div>
+          <div class="dca-row" data-min="4" data-max="6">
+            <div class="dca-cell dca-score">4 – 6</div>
+            <div class="dca-cell dca-signal" style="color:#94a3b8">Neutral</div>
+            <div class="dca-cell dca-act">Minimum DCA / hold</div>
+            <div class="dca-cell dca-alloc" style="color:#94a3b8">+50%</div>
+          </div>
+          <div class="dca-row" data-min="6" data-max="7">
+            <div class="dca-cell dca-score">6 – 7</div>
+            <div class="dca-cell dca-signal" style="color:#f59e0b">Caution</div>
+            <div class="dca-cell dca-act">Reduce DCA size</div>
+            <div class="dca-cell dca-alloc" style="color:#f59e0b">0%</div>
+          </div>
+          <div class="dca-row" data-min="7" data-max="8">
+            <div class="dca-cell dca-score">7 – 8</div>
+            <div class="dca-cell dca-signal" style="color:#f97316">Take Profits</div>
+            <div class="dca-cell dca-act">DCA out ~10%</div>
+            <div class="dca-cell dca-alloc" style="color:#f97316">−10%</div>
+          </div>
+          <div class="dca-row" data-min="8" data-max="9">
+            <div class="dca-cell dca-score">8 – 9</div>
+            <div class="dca-cell dca-signal" style="color:#ef4444">Sell</div>
+            <div class="dca-cell dca-act">DCA out ~25%</div>
+            <div class="dca-cell dca-alloc" style="color:#ef4444">−25%</div>
+          </div>
+          <div class="dca-row" data-min="9" data-max="10.1">
+            <div class="dca-cell dca-score">9 – 10</div>
+            <div class="dca-cell dca-signal" style="color:#b91c1c">Strong Sell</div>
+            <div class="dca-cell dca-act">DCA out ~50%</div>
+            <div class="dca-cell dca-alloc" style="color:#b91c1c">−50%</div>
+          </div>
+        </div>
+      </div><!-- /dca-section -->
+
+    </section>
+
+  </main><!-- /main -->
+
+  <div class="status-bar" id="status-msg-bottom">Loading…</div>
+
+  <footer>
+    <p>Data: <a href="https://coingecko.com" target="_blank">CoinGecko</a> · <a href="https://coinmetrics.io" target="_blank">CoinMetrics Community</a> · <a href="https://alternative.me/crypto/fear-and-greed-index/" target="_blank">Alternative.me</a> &nbsp;|&nbsp; Not financial advice &nbsp;|&nbsp; <a href="https://github.com/YOUR_USERNAME/bitcoin-metrics" target="_blank">GitHub</a> &nbsp;|&nbsp; Updates every 15 min (cached)</p>
+  </footer>
+
+</div><!-- /#app -->
+
+<!-- Chart.js 4 + time adapter + annotation plugin -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/chartjs-adapter-date-fns/3.0.0/chartjs-adapter-date-fns.bundle.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/chartjs-plugin-annotation/3.0.1/chartjs-plugin-annotation.min.js"></script>
+
+<!-- App -->
+<script src="js/config.js"></script>
+<script src="js/api.js"></script>
+<script src="js/calculations.js"></script>
+<script src="js/charts.js"></script>
+<script src="js/main.js"></script>
+
+</body>
+</html>

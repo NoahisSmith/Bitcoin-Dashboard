@@ -1,0 +1,420 @@
+/* ─── Bitcoin Metrics Dashboard — Styles ────────────────────────────────── */
+
+@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@300;400;500;600&family=Inter:wght@300;400;500;600&display=swap');
+
+/* ── Tokens ──────────────────────────────────────────────────────────────── */
+:root {
+  --bg:          #07070e;
+  --surface:     #0c0c18;
+  --surface-alt: #11111f;
+  --border:      #1a1a2c;
+  --border-hi:   #2a2a40;
+  --btc:         #f7931a;
+  --btc-dim:     rgba(247,147,26,0.12);
+  --text:        #e2e8f0;
+  --text-2:      #8891a8;
+  --text-3:      #4a5068;
+  --green:       #10b981;
+  --red:         #ef4444;
+  --yellow:      #f59e0b;
+  --blue:        #3b82f6;
+  --purple:      #8b5cf6;
+  --radius:      8px;
+  --mono:        'IBM Plex Mono', monospace;
+  --sans:        'Inter', sans-serif;
+}
+
+/* ── Reset ───────────────────────────────────────────────────────────────── */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+html { font-size: 14px; scroll-behavior: smooth; }
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--sans);
+  line-height: 1.5;
+  min-height: 100vh;
+  overflow-x: hidden;
+}
+
+/* ── Signature element: risk colour strip ────────────────────────────────── */
+#risk-strip {
+  position: fixed;
+  top: 0; left: 0; right: 0;
+  height: 3px;
+  background: #10b981;
+  z-index: 1000;
+  transition: background 1.2s ease;
+  box-shadow: 0 0 16px currentColor;
+}
+
+/* ── Loader ──────────────────────────────────────────────────────────────── */
+#loader {
+  position: fixed; inset: 0;
+  display: flex; flex-direction: column;
+  align-items: center; justify-content: center;
+  background: var(--bg); z-index: 999;
+  gap: 24px;
+}
+.loader-btc {
+  font-family: var(--mono);
+  font-size: 64px;
+  color: var(--btc);
+  animation: pulse 2s ease-in-out infinite;
+}
+@keyframes pulse {
+  0%, 100% { opacity: 1; text-shadow: 0 0 30px rgba(247,147,26,0.6); }
+  50%       { opacity: 0.5; text-shadow: none; }
+}
+.loader-bar {
+  width: 200px; height: 2px;
+  background: var(--border);
+  border-radius: 1px; overflow: hidden;
+}
+.loader-fill {
+  height: 100%;
+  background: var(--btc);
+  animation: load 2s ease-in-out infinite;
+}
+@keyframes load {
+  0%   { width: 0; margin-left: 0; }
+  50%  { width: 100%; margin-left: 0; }
+  100% { width: 0; margin-left: 100%; }
+}
+.loader-text { color: var(--text-2); font-size: 0.85rem; letter-spacing: 0.05em; }
+
+/* ── App ─────────────────────────────────────────────────────────────────── */
+#app { padding-top: 3px; }  /* clear risk strip */
+
+/* ── Header ──────────────────────────────────────────────────────────────── */
+header {
+  position: sticky; top: 3px; z-index: 100;
+  background: rgba(7,7,14,0.95);
+  backdrop-filter: blur(12px);
+  border-bottom: 1px solid var(--border);
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  padding: 0 24px;
+  gap: 24px;
+  height: 58px;
+}
+.hdr-brand {
+  display: flex; align-items: center; gap: 10px;
+}
+.hdr-symbol {
+  font-family: var(--mono);
+  font-size: 24px; font-weight: 600;
+  color: var(--btc);
+  text-shadow: 0 0 20px rgba(247,147,26,0.4);
+}
+.hdr-title {
+  font-family: var(--mono);
+  font-size: 1rem; font-weight: 500;
+  color: var(--text);
+  letter-spacing: -0.02em;
+}
+.hdr-price-group {
+  display: flex; align-items: center; gap: 20px;
+}
+.hdr-price {
+  font-family: var(--mono);
+  font-size: 1.4rem; font-weight: 600;
+  color: var(--btc);
+  letter-spacing: -0.02em;
+}
+.hdr-change { font-family: var(--mono); font-size: 0.85rem; font-weight: 500; }
+.hdr-change.pos { color: var(--green); }
+.hdr-change.neg { color: var(--red); }
+.hdr-meta {
+  display: flex; gap: 16px;
+  font-size: 0.75rem; color: var(--text-2);
+}
+.hdr-meta span strong {
+  font-family: var(--mono);
+  color: var(--text); font-weight: 500;
+}
+.hdr-status { font-size: 0.7rem; color: var(--text-3); white-space: nowrap; }
+
+/* ── Risk banner ─────────────────────────────────────────────────────────── */
+.risk-banner {
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+  padding: 20px 24px;
+  display: grid;
+  grid-template-columns: 160px 1fr auto;
+  align-items: center;
+  gap: 32px;
+}
+.risk-score-block {
+  text-align: center;
+}
+.risk-score-label {
+  font-size: 0.65rem; letter-spacing: 0.12em;
+  text-transform: uppercase; color: var(--text-3);
+  font-family: var(--mono);
+}
+#risk-score-val {
+  font-family: var(--mono);
+  font-size: 3.5rem; font-weight: 600;
+  line-height: 1;
+  transition: color 1s ease;
+}
+#risk-label {
+  font-family: var(--mono);
+  font-size: 0.75rem; font-weight: 500;
+  text-transform: uppercase; letter-spacing: 0.08em;
+  transition: color 1s ease;
+}
+.risk-gauge-block { flex: 1; }
+.risk-gauge-track {
+  height: 8px;
+  background: var(--border);
+  border-radius: 4px;
+  overflow: hidden;
+  margin-bottom: 8px;
+}
+#risk-gauge-inner {
+  height: 100%;
+  width: 50%;
+  border-radius: 4px;
+  transition: width 1s ease, background 1s ease;
+}
+.risk-gauge-labels {
+  display: flex; justify-content: space-between;
+  font-size: 0.65rem; color: var(--text-3);
+  font-family: var(--mono);
+}
+.risk-dca-block { text-align: right; }
+#risk-action { font-size: 0.85rem; color: var(--text-2); margin-bottom: 4px; }
+#risk-alloc  { font-family: var(--mono); font-size: 0.75rem; color: var(--text-3); }
+
+/* ── Nav ─────────────────────────────────────────────────────────────────── */
+nav.chart-nav {
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+  display: flex; gap: 0;
+  overflow-x: auto;
+  scrollbar-width: none;
+  padding: 0 24px;
+}
+nav.chart-nav::-webkit-scrollbar { display: none; }
+.nav-btn {
+  background: none; border: none; cursor: pointer;
+  font-family: var(--mono);
+  font-size: 0.75rem; font-weight: 500;
+  letter-spacing: 0.04em;
+  color: var(--text-3);
+  padding: 13px 16px;
+  white-space: nowrap;
+  position: relative;
+  transition: color 0.2s;
+}
+.nav-btn::after {
+  content: ''; position: absolute;
+  bottom: 0; left: 0; right: 0;
+  height: 2px; background: var(--btc);
+  transform: scaleX(0);
+  transition: transform 0.2s;
+}
+.nav-btn:hover        { color: var(--text-2); }
+.nav-btn.active       { color: var(--btc); }
+.nav-btn.active::after { transform: scaleX(1); }
+
+/* ── Main ────────────────────────────────────────────────────────────────── */
+main { padding: 24px; max-width: 1400px; margin: 0 auto; }
+
+/* ── Sections ────────────────────────────────────────────────────────────── */
+.section { display: none; }
+.section.active { display: block; }
+
+/* ── Dashboard metric cards ──────────────────────────────────────────────── */
+.cards-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 12px;
+  margin-bottom: 24px;
+}
+.metric-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 16px 18px;
+  transition: border-color 0.2s;
+}
+.metric-card:hover { border-color: var(--border-hi); }
+.card-top {
+  display: flex; align-items: center; justify-content: space-between;
+  margin-bottom: 10px;
+}
+.card-name {
+  font-size: 0.65rem; letter-spacing: 0.12em;
+  text-transform: uppercase; color: var(--text-3);
+  font-family: var(--mono);
+}
+.card-dot {
+  width: 8px; height: 8px; border-radius: 50%;
+  background: var(--text-3);
+  flex-shrink: 0;
+}
+.card-dot.buy     { background: var(--green); box-shadow: 0 0 6px var(--green); }
+.card-dot.sell    { background: var(--red);   box-shadow: 0 0 6px var(--red); }
+.card-dot.caution { background: var(--yellow);box-shadow: 0 0 6px var(--yellow); }
+.card-dot.neutral { background: var(--text-3); }
+
+.card-value {
+  font-family: var(--mono);
+  font-size: 1.4rem; font-weight: 600;
+  color: var(--text);
+  letter-spacing: -0.02em;
+  margin-bottom: 4px;
+}
+.card-detail {
+  font-size: 0.72rem; color: var(--text-2);
+}
+
+/* ── Chart container ─────────────────────────────────────────────────────── */
+.chart-wrap {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 20px;
+  margin-bottom: 20px;
+}
+.chart-head { margin-bottom: 16px; }
+.chart-title {
+  font-family: var(--mono);
+  font-size: 1rem; font-weight: 500;
+  color: var(--text); margin-bottom: 6px;
+}
+.chart-desc {
+  font-size: 0.78rem; color: var(--text-2);
+  max-width: 680px; line-height: 1.6;
+}
+.chart-area { position: relative; height: 420px; }
+
+.no-data {
+  display: flex; align-items: center; justify-content: center;
+  height: 300px;
+  color: var(--text-3); font-size: 0.85rem;
+  font-family: var(--mono);
+  border: 1px dashed var(--border);
+  border-radius: var(--radius);
+}
+
+/* ── Halving countdown ───────────────────────────────────────────────────── */
+.halving-strip {
+  background: var(--btc-dim);
+  border: 1px solid rgba(247,147,26,0.25);
+  border-radius: var(--radius);
+  padding: 10px 16px;
+  margin-bottom: 20px;
+  font-family: var(--mono);
+  font-size: 0.78rem; color: var(--btc);
+  display: flex; align-items: center; gap: 10px;
+}
+.halving-strip::before { content: '⛏'; font-size: 16px; }
+
+/* ── DCA table ───────────────────────────────────────────────────────────── */
+.dca-section {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 20px;
+  margin-top: 20px;
+}
+.dca-title {
+  font-family: var(--mono); font-size: 0.85rem;
+  color: var(--text-2); margin-bottom: 14px;
+  text-transform: uppercase; letter-spacing: 0.08em;
+}
+.dca-grid {
+  display: grid;
+  grid-template-columns: 80px 130px 1fr 90px;
+  gap: 0;
+}
+.dca-header .dca-cell {
+  font-size: 0.65rem; letter-spacing: 0.1em;
+  text-transform: uppercase; color: var(--text-3);
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--border);
+}
+.dca-row {
+  display: contents;
+  transition: background 0.2s;
+}
+.dca-row .dca-cell {
+  padding: 9px 6px;
+  font-size: 0.78rem;
+  border-bottom: 1px solid var(--border);
+  display: flex; align-items: center;
+}
+.dca-row:last-child .dca-cell { border-bottom: none; }
+.dca-row.active .dca-cell {
+  background: var(--btc-dim);
+}
+.dca-score  { font-family: var(--mono); color: var(--text-2); }
+.dca-signal { font-weight: 500; }
+.dca-act    { color: var(--text-2); }
+.dca-alloc  { font-family: var(--mono); font-weight: 600; }
+
+/* ── Status bar ──────────────────────────────────────────────────────────── */
+.status-bar {
+  padding: 8px 24px;
+  font-size: 0.7rem; color: var(--text-3);
+  font-family: var(--mono);
+  border-top: 1px solid var(--border);
+  margin-top: 40px;
+}
+.status-error { color: var(--red); }
+.status-ok    { color: var(--text-3); }
+
+/* ── Footer ──────────────────────────────────────────────────────────────── */
+footer {
+  text-align: center;
+  padding: 24px;
+  font-size: 0.72rem; color: var(--text-3);
+  border-top: 1px solid var(--border);
+}
+footer a { color: var(--text-2); text-decoration: none; }
+footer a:hover { color: var(--btc); }
+
+/* ── Legend items in chart area ──────────────────────────────────────────── */
+.chart-legend {
+  display: flex; flex-wrap: wrap; gap: 16px;
+  margin-top: 12px; margin-bottom: 4px;
+  font-size: 0.72rem; color: var(--text-2);
+  font-family: var(--mono);
+}
+.legend-item { display: flex; align-items: center; gap: 6px; }
+.legend-swatch {
+  width: 20px; height: 2px; border-radius: 1px;
+}
+.legend-dash { border-top: 2px dashed; width: 20px; }
+
+/* ── Responsive ──────────────────────────────────────────────────────────── */
+@media (max-width: 900px) {
+  header {
+    grid-template-columns: 1fr;
+    grid-template-rows: auto auto;
+    height: auto;
+    padding: 12px 16px; gap: 10px;
+  }
+  .hdr-meta { display: none; }
+  .risk-banner {
+    grid-template-columns: 1fr 1fr;
+    grid-template-rows: auto auto;
+  }
+  .risk-dca-block { grid-column: span 2; text-align: left; }
+  main { padding: 12px; }
+  .cards-grid { grid-template-columns: repeat(2, 1fr); }
+  .chart-area { height: 300px; }
+  .dca-grid   { grid-template-columns: 70px 100px 1fr 70px; }
+}
+
+@media (max-width: 600px) {
+  .risk-banner { grid-template-columns: 1fr; }
+  .cards-grid  { grid-template-columns: repeat(2, 1fr); }
+  .dca-grid    { grid-template-columns: 1fr 1fr; }
+  .dca-header .dca-cell:nth-child(3),
+  .dca-row    .dca-cell:nth-child(3) { display: none; }
+}
