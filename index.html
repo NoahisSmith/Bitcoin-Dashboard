@@ -125,7 +125,13 @@
       <!-- Overview chart -->
       <div class="chart-wrap">
         <div class="chart-head">
-          <div class="chart-title">Price + 200 Week Moving Average</div>
+          <div class="chart-head-row">
+            <div class="chart-title">Price + 200 Week Moving Average</div>
+            <div class="scale-toggle" data-chart="overview">
+              <button class="scale-btn active" data-scale="log">LOG</button>
+              <button class="scale-btn" data-scale="linear">LIN</button>
+            </div>
+          </div>
           <div class="chart-desc">Full BTC price history on a log scale. The 200 Week MA (green) has never been breached on a monthly close and marks historical cycle lows.</div>
         </div>
         <div class="chart-area"><canvas id="chart-overview"></canvas></div>
@@ -140,7 +146,13 @@
     <section id="sec-ma200w" class="section">
       <div class="chart-wrap">
         <div class="chart-head">
-          <div class="chart-title">200 Week Moving Average Heatmap</div>
+          <div class="chart-head-row">
+            <div class="chart-title">200 Week Moving Average Heatmap</div>
+            <div class="scale-toggle" data-chart="ma200w">
+              <button class="scale-btn active" data-scale="log">LOG</button>
+              <button class="scale-btn" data-scale="linear">LIN</button>
+            </div>
+          </div>
           <div class="chart-desc">Price coloured by its multiple of the 200W MA. Green = below or near MA (accumulation). Orange/Red = highly extended above MA (distribution). The ×5 dashed line has historically been near cycle tops.</div>
         </div>
         <div class="chart-area"><canvas id="chart-ma200w"></canvas></div>
@@ -206,7 +218,13 @@
     <section id="sec-logregr" class="section">
       <div class="chart-wrap">
         <div class="chart-head">
-          <div class="chart-title">Logarithmic Regression + Quantile Fan</div>
+          <div class="chart-head-row">
+            <div class="chart-title">Logarithmic Regression + Quantile Fan</div>
+            <div class="scale-toggle" data-chart="logregr">
+              <button class="scale-btn active" data-scale="log">LOG</button>
+              <button class="scale-btn" data-scale="linear">LIN</button>
+            </div>
+          </div>
           <div class="chart-desc">Power-law regression fit on log₁₀(price) vs log₁₀(days since genesis). Quantile bands show the 10th, 25th, 50th, 75th, and 90th percentile of historical price relative to regression. Price near the 90th percentile = historically overvalued. Near the 10th = historically undervalued.</div>
         </div>
         <div class="chart-area"><canvas id="chart-logregr"></canvas></div>
@@ -225,7 +243,13 @@
     <section id="sec-picycle" class="section">
       <div class="chart-wrap">
         <div class="chart-head">
-          <div class="chart-title">Pi Cycle Top Indicator</div>
+          <div class="chart-head-row">
+            <div class="chart-title">Pi Cycle Top Indicator</div>
+            <div class="scale-toggle" data-chart="picycle">
+              <button class="scale-btn active" data-scale="log">LOG</button>
+              <button class="scale-btn" data-scale="linear">LIN</button>
+            </div>
+          </div>
           <div class="chart-desc">When the 111-day MA crosses above the 2× 350-day MA, it has historically marked BTC cycle tops to within a few days. Currently there is no crossover, the 350×2 line acts as overhead resistance during bull markets.</div>
         </div>
         <div class="chart-area"><canvas id="chart-picycle"></canvas></div>

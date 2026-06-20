@@ -11,6 +11,13 @@ const State = {
   currentRisk:  null,
   halfingInfo:  null,
   currentSection: 'dashboard',
+  // Per-chart linear/log scale preference for the four price-based charts
+  scalePrefs: {
+    overview: 'log',
+    ma200w:   'log',
+    logregr:  'log',
+    picycle:  'log',
+  },
 };
 
 /* ════════════════════════════════════════════════════════════════════════ */
@@ -218,15 +225,46 @@ function renderSection(section) {
   if (!rows.length) return;
 
   switch (section) {
-    case 'dashboard':   ChartRenderers.overview('chart-overview', rows); break;
-    case 'ma200w':      ChartRenderers.ma200w('chart-ma200w', rows); break;
+    case 'dashboard':   ChartRenderers.overview('chart-overview', rows, State.scalePrefs.overview); break;
+    case 'ma200w':      ChartRenderers.ma200w('chart-ma200w', rows, State.scalePrefs.ma200w); break;
     case 'rsi':         ChartRenderers.rsi('chart-rsi', rows); break;
     case 'mayer':       ChartRenderers.mayer('chart-mayer', rows); break;
     case 'puell':       ChartRenderers.puell('chart-puell', rows); break;
-    case 'logregr':     ChartRenderers.logRegression('chart-logregr', rows, regression, residuals); break;
-    case 'picycle':     ChartRenderers.piCycle('chart-picycle', rows); break;
+    case 'logregr':     ChartRenderers.logRegression('chart-logregr', rows, regression, residuals, State.scalePrefs.logregr); break;
+    case 'picycle':     ChartRenderers.piCycle('chart-picycle', rows, State.scalePrefs.picycle); break;
     case 'risk':        ChartRenderers.risk('chart-risk', rows); break;
   }
+}
+
+/* ════════════════════════════════════════════════════════════════════════ */
+/*  Linear / Log scale toggles                                              */
+/* ════════════════════════════════════════════════════════════════════════ */
+function rerenderChart(chartKey) {
+  const { rows, regression, residuals } = State;
+  if (!rows.length) return;
+  const scale = State.scalePrefs[chartKey];
+
+  switch (chartKey) {
+    case 'overview': ChartRenderers.overview('chart-overview', rows, scale); break;
+    case 'ma200w':   ChartRenderers.ma200w('chart-ma200w', rows, scale); break;
+    case 'logregr':  ChartRenderers.logRegression('chart-logregr', rows, regression, residuals, scale); break;
+    case 'picycle':  ChartRenderers.piCycle('chart-picycle', rows, scale); break;
+  }
+}
+
+function setupScaleToggles() {
+  $$('.scale-toggle').forEach(group => {
+    const chartKey = group.dataset.chart;
+    group.querySelectorAll('.scale-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const scale = btn.dataset.scale;
+        if (State.scalePrefs[chartKey] === scale) return;
+        State.scalePrefs[chartKey] = scale;
+        group.querySelectorAll('.scale-btn').forEach(b => b.classList.toggle('active', b === btn));
+        rerenderChart(chartKey);
+      });
+    });
+  });
 }
 
 /* ════════════════════════════════════════════════════════════════════════ */
@@ -345,5 +383,6 @@ document.addEventListener('DOMContentLoaded', () => {
   $$('.nav-btn').forEach(btn =>
     btn.addEventListener('click', () => navigate(btn.dataset.section))
   );
+  setupScaleToggles();
   init();
 });

@@ -126,10 +126,10 @@ function thin(rows, maxPts = 1500) {
 const ChartRenderers = {
 
   /* ── Overview: price + 200 WMA ───────────────────────────────────────── */
-  overview(canvasId, rows) {
+  overview(canvasId, rows, scaleType = 'log') {
     destroyChart(canvasId);
     const pts = thin(rows.filter(r => r.price));
-    const opts = baseOptions(true, 'USD');
+    const opts = baseOptions(scaleType === 'log', 'USD');
 
     opts.plugins.annotation.annotations = {
       ...hLine('zero', 1, '#4a5568'),
@@ -159,10 +159,10 @@ const ChartRenderers = {
   },
 
   /* ── 200 Week Moving Average ──────────────────────────────────────────── */
-  ma200w(canvasId, rows) {
+  ma200w(canvasId, rows, scaleType = 'log') {
     destroyChart(canvasId);
     const pts = thin(rows.filter(r => r.price));
-    const opts = baseOptions(true, 'USD');
+    const opts = baseOptions(scaleType === 'log', 'USD');
 
     // Colour‐coded price dataset (green below MA, orange above)
     const colorData = pts.map(r => {
@@ -297,10 +297,10 @@ const ChartRenderers = {
   },
 
   /* ── Logarithmic Regression + Quantile Fan ───────────────────────────── */
-  logRegression(canvasId, rows, regression, residuals) {
+  logRegression(canvasId, rows, regression, residuals, scaleType = 'log') {
     destroyChart(canvasId);
     const pts = thin(rows.filter(r => r.price && r.logRegrPred));
-    const opts = baseOptions(true, 'USD');
+    const opts = baseOptions(scaleType === 'log', 'USD');
 
     const quantileOffsets = CONFIG.QUANTILE_BANDS.map(q => Calc.quantile(residuals, q));
     const bandColors = ['#10b981', '#34d399', '#f7931a', '#f97316', '#ef4444'];
@@ -338,10 +338,10 @@ const ChartRenderers = {
   },
 
   /* ── Pi Cycle Top ────────────────────────────────────────────────────── */
-  piCycle(canvasId, rows) {
+  piCycle(canvasId, rows, scaleType = 'log') {
     destroyChart(canvasId);
     const pts = thin(rows.filter(r => r.price && r.piM111 != null && r.piM350x2 != null));
-    const opts = baseOptions(true, 'USD');
+    const opts = baseOptions(scaleType === 'log', 'USD');
 
     CHARTS[canvasId] = new Chart(document.getElementById(canvasId), {
       type: 'line',

@@ -281,15 +281,43 @@ main { padding: 24px; max-width: 1400px; margin: 0 auto; }
   margin-bottom: 20px;
 }
 .chart-head { margin-bottom: 16px; }
+.chart-head-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 6px;
+}
 .chart-title {
   font-family: var(--mono);
   font-size: 1rem; font-weight: 500;
-  color: var(--text); margin-bottom: 6px;
+  color: var(--text);
 }
 .chart-desc {
   font-size: 0.78rem; color: var(--text-2);
   max-width: 680px; line-height: 1.6;
 }
+
+/* Linear / Log scale toggle */
+.scale-toggle {
+  display: inline-flex;
+  flex-shrink: 0;
+  border: 1px solid var(--border-hi);
+  border-radius: 6px;
+  overflow: hidden;
+}
+.scale-btn {
+  background: none; border: none; cursor: pointer;
+  font-family: var(--mono);
+  font-size: 0.65rem; font-weight: 600;
+  letter-spacing: 0.06em;
+  color: var(--text-3);
+  padding: 5px 11px;
+  transition: background 0.15s, color 0.15s;
+}
+.scale-btn + .scale-btn { border-left: 1px solid var(--border-hi); }
+.scale-btn:hover    { color: var(--text-2); }
+.scale-btn.active   { background: var(--btc-dim); color: var(--btc); }
 .chart-area { position: relative; height: 420px; }
 
 .no-data {
