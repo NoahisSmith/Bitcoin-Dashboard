@@ -17,7 +17,12 @@ const State = {
     ma200w:   'log',
     logregr:  'log',
     picycle:  'log',
+    backtest: 'log',
   },
+  // Global chart date range (null = unbounded). Stored as 'YYYY-MM-DD' strings
+  // so they compare directly against row.dateStr.
+  dateRange: { start: null, end: null },
+  lastBacktest: null,
 };
 
 /* ════════════════════════════════════════════════════════════════════════ */
@@ -220,9 +225,20 @@ function navigate(section) {
   }
 }
 
+// Rows clipped to the global date range. Metrics are NOT recomputed — the full
+// history is needed for moving averages, regression, etc. — we only restrict
+// which rows the chart draws.
+function rangedRows() {
+  const { start, end } = State.dateRange;
+  if (!start && !end) return State.rows;
+  return State.rows.filter(r =>
+    (!start || r.dateStr >= start) && (!end || r.dateStr <= end));
+}
+
 function renderSection(section) {
-  const { rows, regression, residuals } = State;
-  if (!rows.length) return;
+  const { regression, residuals } = State;
+  if (!State.rows.length) return;
+  const rows = rangedRows();
 
   switch (section) {
     case 'dashboard':   ChartRenderers.overview('chart-overview', rows, State.scalePrefs.overview); break;
@@ -233,15 +249,63 @@ function renderSection(section) {
     case 'logregr':     ChartRenderers.logRegression('chart-logregr', rows, regression, residuals, State.scalePrefs.logregr); break;
     case 'picycle':     ChartRenderers.piCycle('chart-picycle', rows, State.scalePrefs.picycle); break;
     case 'risk':        ChartRenderers.risk('chart-risk', rows); break;
+    case 'backtest':    renderBacktest(); break;
   }
+}
+
+/* ════════════════════════════════════════════════════════════════════════ */
+/*  Backtest                                                                */
+/* ════════════════════════════════════════════════════════════════════════ */
+function renderBacktest() {
+  const { rows } = State;
+  if (!rows.length) return;
+
+  // The simulation window follows the global date range.
+  const result = Backtest.run(rows, {
+    weeklyAmount: $('bt-amount')?.value,
+    startDate:    State.dateRange.start,
+    endDate:      State.dateRange.end,
+  });
+  State.lastBacktest = result;
+
+  ChartRenderers.backtest('chart-backtest', result, State.scalePrefs.backtest);
+  renderBacktestStats(result);
+}
+
+function renderBacktestStats(result) {
+  const el = $('bt-stats');
+  if (!el) return;
+  if (!result || !result.summary) { el.innerHTML = '<div class="bt-empty">No data in the selected range.</div>'; return; }
+
+  const { plain, smart } = result.summary;
+  const pct  = v => v == null ? '—' : (v >= 0 ? '+' : '') + (v * 100).toFixed(1) + '%';
+  const btc  = v => v == null ? '—' : v.toFixed(4) + ' ₿';
+  const win  = (a, b) => a > b ? 'pos' : a < b ? 'neg' : '';
+
+  const stat = (label, plainVal, smartVal, smartCls) => `
+    <div class="bt-stat">
+      <div class="bt-stat-label">${label}</div>
+      <div class="bt-stat-row"><span>Plain</span><strong>${plainVal}</strong></div>
+      <div class="bt-stat-row"><span>Weighted</span><strong class="${smartCls}">${smartVal}</strong></div>
+    </div>`;
+
+  el.innerHTML =
+    stat('Capital deployed', fmtUSD(plain.deployed), fmtUSD(smart.deployed), '') +
+    stat('BTC stacked',      btc(plain.btc),         btc(smart.btc),        win(smart.btc, plain.btc)) +
+    stat('Portfolio value',  fmtUSD(plain.value),    fmtUSD(smart.value),   win(smart.value, plain.value)) +
+    stat('Return on capital', pct(plain.roi),        pct(smart.roi),        win(smart.roi, plain.roi)) +
+    stat('Max drawdown',     pct(plain.maxDrawdown), pct(smart.maxDrawdown), win(plain.maxDrawdown, smart.maxDrawdown)) +
+    stat('Realized cash',    '—',                    fmtUSD(smart.proceeds), '') +
+    `<div class="bt-note">${result.periods.toLocaleString()} weekly periods simulated. "Weighted" portfolio value includes realized cash from sells.</div>`;
 }
 
 /* ════════════════════════════════════════════════════════════════════════ */
 /*  Linear / Log scale toggles                                              */
 /* ════════════════════════════════════════════════════════════════════════ */
 function rerenderChart(chartKey) {
-  const { rows, regression, residuals } = State;
-  if (!rows.length) return;
+  const { regression, residuals } = State;
+  if (!State.rows.length) return;
+  const rows  = rangedRows();
   const scale = State.scalePrefs[chartKey];
 
   switch (chartKey) {
@@ -249,6 +313,7 @@ function rerenderChart(chartKey) {
     case 'ma200w':   ChartRenderers.ma200w('chart-ma200w', rows, scale); break;
     case 'logregr':  ChartRenderers.logRegression('chart-logregr', rows, regression, residuals, scale); break;
     case 'picycle':  ChartRenderers.piCycle('chart-picycle', rows, scale); break;
+    case 'backtest': ChartRenderers.backtest('chart-backtest', State.lastBacktest, scale); break;
   }
 }
 
@@ -339,23 +404,13 @@ async function init() {
     State.regression = regression;
     State.residuals  = residuals;
 
-    // Current metrics — each field looked up independently since weekly
-    // RSI and Puell aren't populated on every single daily row (see
-    // updateMetricCards for why), so a single "last row" misses them
-    // most days and silently drops them from the weighted risk score.
+    // Current risk = the latest row that carries a (walk-forward) score.
+    // computeAll already builds the score series with per-field staleness and
+    // history gating baked in, so the live read is just the most recent value
+    // rather than a separately re-derived calculation.
     const findLatest = field => [...rows].reverse().find(r => r[field] != null);
     const last = findLatest('price');
-    if (last) {
-      State.currentRisk = Calc.riskScore({
-        price:     last.price,
-        ma200w:    findLatest('ma200w')?.ma200w ?? null,
-        rsi:       findLatest('weeklyRsi')?.weeklyRsi ?? null,
-        mayer:     findLatest('mayer')?.mayer ?? null,
-        puell:     findLatest('puell')?.puell ?? null,
-        logPct:    findLatest('logRegrPct')?.logRegrPct ?? null,
-        fearGreed: findLatest('fearGreed')?.fearGreed ?? null,
-      });
-    }
+    State.currentRisk = findLatest('riskScore')?.riskScore ?? null;
 
     // Halving
     State.halvingInfo = Calc.halvingCountdown(height);
@@ -378,11 +433,70 @@ async function init() {
   }
 }
 
+/* ── Backtest controls ──────────────────────────────────────────────────── */
+function setupBacktestControls() {
+  const run = $('bt-run');
+  if (run) run.addEventListener('click', renderBacktest);
+  const amt = $('bt-amount');
+  if (amt) amt.addEventListener('change', renderBacktest);
+}
+
+/* ════════════════════════════════════════════════════════════════════════ */
+/*  Global date range                                                       */
+/* ════════════════════════════════════════════════════════════════════════ */
+// Re-render the active section, and drop the lazy-render markers so every other
+// section redraws with the new range when next visited.
+function refreshCharts() {
+  $$('span[id$="-rendered"]').forEach(m => m.remove());
+  renderSection(State.currentSection);
+  const id = `${State.currentSection}-rendered`;
+  if (!$(id)) {
+    const marker = document.createElement('span');
+    marker.id = id; marker.style.display = 'none';
+    document.body.appendChild(marker);
+  }
+}
+
+function applyDateRange(start, end) {
+  State.dateRange = { start: start || null, end: end || null };
+  const s = $('range-start'), e = $('range-end');
+  if (s) s.value = State.dateRange.start || '';
+  if (e) e.value = State.dateRange.end   || '';
+  refreshCharts();
+}
+
+function setRangePreset(key, btn) {
+  $$('.range-btn').forEach(b => b.classList.toggle('active', b === btn));
+  if (key === 'all') { applyDateRange(null, null); return; }
+  const rows = State.rows;
+  if (!rows.length) return;
+  const lastStr = rows[rows.length - 1].dateStr;
+  const d = new Date(lastStr + 'T00:00:00Z');
+  d.setUTCFullYear(d.getUTCFullYear() - parseInt(key, 10));
+  applyDateRange(d.toISOString().slice(0, 10), null);
+}
+
+function setupDateRange() {
+  $$('.range-btn').forEach(btn =>
+    btn.addEventListener('click', () => setRangePreset(btn.dataset.range, btn))
+  );
+  ['range-start', 'range-end'].forEach(id => {
+    const el = $(id);
+    if (!el) return;
+    el.addEventListener('change', () => {
+      $$('.range-btn').forEach(b => b.classList.remove('active'));  // custom = no preset
+      applyDateRange($('range-start')?.value, $('range-end')?.value);
+    });
+  });
+}
+
 /* ── Wire up nav buttons ────────────────────────────────────────────────── */
 document.addEventListener('DOMContentLoaded', () => {
   $$('.nav-btn').forEach(btn =>
     btn.addEventListener('click', () => navigate(btn.dataset.section))
   );
   setupScaleToggles();
+  setupBacktestControls();
+  setupDateRange();
   init();
 });

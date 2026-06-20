@@ -220,6 +220,60 @@ nav.chart-nav::-webkit-scrollbar { display: none; }
 .nav-btn.active       { color: var(--btc); }
 .nav-btn.active::after { transform: scaleX(1); }
 
+/* ── Global date-range bar ───────────────────────────────────────────────── */
+.range-bar {
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+  display: flex; flex-wrap: wrap; align-items: center;
+  gap: 14px;
+  padding: 10px 24px;
+}
+.range-label {
+  font-size: 0.62rem; letter-spacing: 0.12em;
+  text-transform: uppercase; color: var(--text-3);
+  font-family: var(--mono);
+}
+.range-presets {
+  display: inline-flex;
+  border: 1px solid var(--border-hi);
+  border-radius: 6px;
+  overflow: hidden;
+}
+.range-btn {
+  background: none; border: none; cursor: pointer;
+  font-family: var(--mono);
+  font-size: 0.65rem; font-weight: 600; letter-spacing: 0.05em;
+  color: var(--text-3);
+  padding: 5px 12px;
+  transition: background 0.15s, color 0.15s;
+}
+.range-btn + .range-btn { border-left: 1px solid var(--border-hi); }
+.range-btn:hover  { color: var(--text-2); }
+.range-btn.active { background: var(--btc-dim); color: var(--btc); }
+.range-custom {
+  display: flex; flex-wrap: wrap; gap: 12px;
+  font-size: 0.62rem; letter-spacing: 0.08em;
+  text-transform: uppercase; color: var(--text-3);
+  font-family: var(--mono);
+}
+.range-custom label { display: inline-flex; align-items: center; gap: 6px; }
+.range-custom input {
+  background: var(--surface-alt);
+  border: 1px solid var(--border-hi);
+  border-radius: 6px;
+  color: var(--text);
+  font-family: var(--mono);
+  font-size: 0.78rem;
+  padding: 5px 8px;
+}
+.range-custom input:focus { outline: none; border-color: var(--btc); }
+
+.bt-hint {
+  font-size: 0.7rem; color: var(--text-3);
+  font-family: var(--mono);
+  align-self: center;
+}
+
 /* ── Main ────────────────────────────────────────────────────────────────── */
 main { padding: 24px; max-width: 1400px; margin: 0 auto; }
 
@@ -360,6 +414,7 @@ main { padding: 24px; max-width: 1400px; margin: 0 auto; }
   grid-template-columns: 80px 130px 1fr 90px;
   gap: 0;
 }
+.dca-header { display: contents; }
 .dca-header .dca-cell {
   font-size: 0.65rem; letter-spacing: 0.1em;
   text-transform: uppercase; color: var(--text-3);
@@ -384,6 +439,75 @@ main { padding: 24px; max-width: 1400px; margin: 0 auto; }
 .dca-signal { font-weight: 500; }
 .dca-act    { color: var(--text-2); }
 .dca-alloc  { font-family: var(--mono); font-weight: 600; }
+
+/* ── Backtest controls & stats ───────────────────────────────────────────── */
+.bt-controls {
+  display: flex; flex-wrap: wrap; align-items: flex-end;
+  gap: 14px; margin-bottom: 18px;
+}
+.bt-field {
+  display: flex; flex-direction: column; gap: 5px;
+  font-size: 0.65rem; letter-spacing: 0.1em;
+  text-transform: uppercase; color: var(--text-3);
+  font-family: var(--mono);
+}
+.bt-field input {
+  background: var(--surface-alt);
+  border: 1px solid var(--border-hi);
+  border-radius: 6px;
+  color: var(--text);
+  font-family: var(--mono);
+  font-size: 0.85rem;
+  padding: 8px 10px;
+  width: 150px;
+}
+.bt-field input:focus { outline: none; border-color: var(--btc); }
+.bt-run {
+  background: var(--btc-dim);
+  border: 1px solid var(--btc);
+  border-radius: 6px;
+  color: var(--btc);
+  cursor: pointer;
+  font-family: var(--mono);
+  font-size: 0.75rem; font-weight: 600;
+  letter-spacing: 0.06em;
+  padding: 9px 22px;
+  transition: background 0.15s;
+}
+.bt-run:hover { background: rgba(247,147,26,0.22); }
+
+.bt-stats {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(190px, 1fr));
+  gap: 12px;
+  margin-top: 18px;
+}
+.bt-stat {
+  background: var(--surface-alt);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 12px 14px;
+}
+.bt-stat-label {
+  font-size: 0.6rem; letter-spacing: 0.12em;
+  text-transform: uppercase; color: var(--text-3);
+  font-family: var(--mono); margin-bottom: 8px;
+}
+.bt-stat-row {
+  display: flex; align-items: baseline; justify-content: space-between;
+  font-size: 0.72rem; color: var(--text-2);
+  padding: 2px 0;
+}
+.bt-stat-row strong {
+  font-family: var(--mono); font-weight: 600; color: var(--text);
+}
+.bt-stat-row strong.pos { color: var(--green); }
+.bt-stat-row strong.neg { color: var(--red); }
+.bt-note, .bt-empty {
+  grid-column: 1 / -1;
+  font-size: 0.7rem; color: var(--text-3);
+  font-family: var(--mono);
+}
 
 /* ── Status bar ──────────────────────────────────────────────────────────── */
 .status-bar {

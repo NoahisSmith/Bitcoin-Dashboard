@@ -77,7 +77,24 @@
     <button class="nav-btn" data-section="logregr">Log Regression</button>
     <button class="nav-btn" data-section="picycle">Pi Cycle</button>
     <button class="nav-btn" data-section="risk">Risk &amp; DCA</button>
+    <button class="nav-btn" data-section="backtest">Backtest</button>
   </nav>
+
+  <!-- GLOBAL DATE RANGE (applies to every chart + the backtest window) -->
+  <div class="range-bar">
+    <span class="range-label">Date range</span>
+    <div class="range-presets">
+      <button class="range-btn active" data-range="all">All</button>
+      <button class="range-btn" data-range="8">8Y</button>
+      <button class="range-btn" data-range="4">4Y</button>
+      <button class="range-btn" data-range="2">2Y</button>
+      <button class="range-btn" data-range="1">1Y</button>
+    </div>
+    <div class="range-custom">
+      <label>From <input type="date" id="range-start"></label>
+      <label>To <input type="date" id="range-end"></label>
+    </div>
+  </div>
 
   <!-- MAIN -->
   <main>
@@ -266,7 +283,7 @@
       <div class="chart-wrap">
         <div class="chart-head">
           <div class="chart-title">Composite Risk Score (Historical)</div>
-          <div class="chart-desc">Weighted composite of 200W MA multiple (20%), weekly RSI (15%), Mayer Multiple (25%), Puell Multiple (20%), log regression percentile (15%), and Fear &amp; Greed (5%). Score 0 = maximum buy opportunity. Score 10 = maximum sell signal.</div>
+          <div class="chart-desc">Category-weighted composite — Valuation 45% (200W MA, Mayer, log-regression), Momentum 20% (weekly RSI), Miner 20% (Puell), Sentiment 15% (Fear &amp; Greed). Each metric is scored by its percentile over a trailing ~4-year window (cycle-relative, using only data available at the time), so readings reflect today's regime rather than the 2010–2013 hyper-volatile era, and the historical line carries no hindsight bias. Score 0 = maximum buy opportunity, 10 = maximum sell signal. The first ~2 years are blank while history accumulates.</div>
         </div>
         <div class="chart-area"><canvas id="chart-risk"></canvas></div>
         <div class="chart-legend">
@@ -310,36 +327,69 @@
           <div class="dca-row" data-min="4" data-max="6">
             <div class="dca-cell dca-score">4 – 6</div>
             <div class="dca-cell dca-signal" style="color:#94a3b8">Neutral</div>
-            <div class="dca-cell dca-act">Minimum DCA / hold</div>
-            <div class="dca-cell dca-alloc" style="color:#94a3b8">+50%</div>
+            <div class="dca-cell dca-act">Steady DCA</div>
+            <div class="dca-cell dca-alloc" style="color:#94a3b8">+75%</div>
           </div>
           <div class="dca-row" data-min="6" data-max="7">
             <div class="dca-cell dca-score">6 – 7</div>
             <div class="dca-cell dca-signal" style="color:#f59e0b">Caution</div>
             <div class="dca-cell dca-act">Reduce DCA size</div>
-            <div class="dca-cell dca-alloc" style="color:#f59e0b">0%</div>
+            <div class="dca-cell dca-alloc" style="color:#f59e0b">+25%</div>
           </div>
           <div class="dca-row" data-min="7" data-max="8">
             <div class="dca-cell dca-score">7 – 8</div>
             <div class="dca-cell dca-signal" style="color:#f97316">Take Profits</div>
-            <div class="dca-cell dca-act">DCA out ~10%</div>
-            <div class="dca-cell dca-alloc" style="color:#f97316">−10%</div>
+            <div class="dca-cell dca-act">Trim ~5%</div>
+            <div class="dca-cell dca-alloc" style="color:#f97316">−5%</div>
           </div>
           <div class="dca-row" data-min="8" data-max="9">
             <div class="dca-cell dca-score">8 – 9</div>
             <div class="dca-cell dca-signal" style="color:#ef4444">Sell</div>
-            <div class="dca-cell dca-act">DCA out ~25%</div>
-            <div class="dca-cell dca-alloc" style="color:#ef4444">−25%</div>
+            <div class="dca-cell dca-act">Trim ~10%</div>
+            <div class="dca-cell dca-alloc" style="color:#ef4444">−10%</div>
           </div>
           <div class="dca-row" data-min="9" data-max="10.1">
             <div class="dca-cell dca-score">9 – 10</div>
             <div class="dca-cell dca-signal" style="color:#b91c1c">Strong Sell</div>
-            <div class="dca-cell dca-act">DCA out ~50%</div>
-            <div class="dca-cell dca-alloc" style="color:#b91c1c">−50%</div>
+            <div class="dca-cell dca-act">Trim ~20%</div>
+            <div class="dca-cell dca-alloc" style="color:#b91c1c">−20%</div>
           </div>
         </div>
       </div><!-- /dca-section -->
 
+    </section>
+
+    <!-- ── BACKTEST ───────────────────────────────────────────────────── -->
+    <section id="sec-backtest" class="section">
+      <div class="chart-wrap">
+        <div class="chart-head">
+          <div class="chart-head-row">
+            <div class="chart-title">DCA Strategy Backtest</div>
+            <div class="scale-toggle" data-chart="backtest">
+              <button class="scale-btn active" data-scale="log">LOG</button>
+              <button class="scale-btn" data-scale="linear">LIN</button>
+            </div>
+          </div>
+          <div class="chart-desc">Simulates investing the same weekly amount two ways: <strong>Plain DCA</strong> (buy every week, always) vs <strong>Score-Weighted DCA</strong> (scale each buy by the risk score's DCA allocation, and sell a slice of holdings when the score signals distribution). Portfolio value includes realized cash from sells. Adjust the inputs to re-run; use it to tune the weights in config.js. Not financial advice.</div>
+        </div>
+
+        <div class="bt-controls">
+          <label class="bt-field">
+            <span>Weekly amount ($)</span>
+            <input type="number" id="bt-amount" value="100" min="1" step="10">
+          </label>
+          <button class="bt-run" id="bt-run">Run</button>
+          <span class="bt-hint">Simulation window follows the global date range above.</span>
+        </div>
+
+        <div class="chart-area"><canvas id="chart-backtest"></canvas></div>
+        <div class="chart-legend">
+          <div class="legend-item"><div class="legend-swatch" style="background:#10b981"></div>Score-Weighted DCA</div>
+          <div class="legend-item"><div class="legend-swatch" style="background:#f7931a"></div>Plain DCA</div>
+        </div>
+
+        <div class="bt-stats" id="bt-stats"></div>
+      </div>
     </section>
 
   </main><!-- /main -->
@@ -361,6 +411,7 @@
 <script src="js/config.js"></script>
 <script src="js/api.js"></script>
 <script src="js/calculations.js"></script>
+<script src="js/backtest.js"></script>
 <script src="js/charts.js"></script>
 <script src="js/main.js"></script>
 

@@ -136,54 +136,135 @@ const Calc = {
     return Math.max(0, Math.min(1, (value - min) / (max - min)));
   },
 
-  /* ── Composite risk score 0 – 10 ────────────────────────────────────── */
-  riskScore({ price, ma200w, rsi, mayer, puell, logPct, fearGreed }) {
-    const W = CONFIG.RISK_WEIGHTS;
-    const R = CONFIG.RISK_RANGES;
-
-    const scores = {
-      ma200w:    price && ma200w ? this.norm(price / ma200w, R.ma200w.min, R.ma200w.max) : null,
-      rsi:       this.norm(rsi,       R.rsi.min,       R.rsi.max),
-      mayer:     this.norm(mayer,     R.mayer.min,     R.mayer.max),
-      puell:     this.norm(puell,     R.puell.min,     R.puell.max),
-      logRegr:   logPct,
-      fearGreed: this.norm(fearGreed, R.fearGreed.min, R.fearGreed.max),
-    };
-
-    let totalW = 0, totalS = 0;
-    for (const [k, w] of Object.entries(W)) {
-      if (scores[k] != null) { totalS += scores[k] * w; totalW += w; }
+  /* ── Walk-forward trailing-window percentile rank ───────────────────── */
+  // For each index, the fraction of non-null values within the trailing
+  // `windowMs` (and the current value itself) that are ≤ the current value,
+  // in [0,1]. Null in → null out. Uses only data available up to that point
+  // (no lookahead) and only the recent window (no permanent drag from the
+  // ancient hyper-volatile era), so it tracks the prevailing regime.
+  rollingPercentile(values, dates, windowMs) {
+    const out = new Array(values.length).fill(null);
+    for (let i = 0; i < values.length; i++) {
+      const v = values[i];
+      if (v == null || isNaN(v)) continue;
+      const cutoff = dates[i] - windowMs;
+      let countLE = 0, total = 0;
+      for (let j = i; j >= 0 && dates[j] >= cutoff; j--) {
+        const w = values[j];
+        if (w == null || isNaN(w)) continue;
+        total++;
+        if (w <= v) countLE++;
+      }
+      out[i] = total > 0 ? countLE / total : null;
     }
-    return totalW === 0 ? null : (totalS / totalW) * 10;
+    return out;
   },
 
-  /* ── Risk score series over time ────────────────────────────────────── */
-  riskScoreSeries(data, regression, residualQuantiles) {
-    return data.map(d => {
-      if (!d.price) return null;
+  /* ── Walk-forward log-regression percentile (lookahead-free) ────────── */
+  // At each day t, fit the power law on data [0..t] only (incremental sums) —
+  // the long-term structural law benefits from all prior data — then rank the
+  // current residual against residuals within the trailing `windowMs`,
+  // recomputed with that fit. Unlike the full-history fit used for the chart
+  // overlay this never "knows" the future, and the windowed ranking keeps the
+  // percentile relative to the recent regime.
+  walkForwardLogPct(rows, windowMs) {
+    const out = new Array(rows.length).fill(null);
+    const g   = CONFIG.GENESIS.getTime();
+    let n = 0, sx = 0, sy = 0, sxx = 0, sxy = 0;
+    const xs = [], ys = [], ds = [];
 
-      // Log regression percentile
-      let logPct = null;
-      if (regression && d.date) {
-        const days = (d.date - CONFIG.GENESIS.getTime()) / 86400000;
-        if (days > 1) {
-          const pred = regression.a + regression.b * Math.log10(days);
-          const res  = Math.log10(d.price) - pred;
-          const cnt  = residualQuantiles.filter(r => r <= res).length;
-          logPct     = cnt / residualQuantiles.length;
-        }
+    for (let i = 0; i < rows.length; i++) {
+      const p = rows[i].price;
+      if (!p || p <= 0) continue;
+      const t = rows[i].date.getTime();
+      const days = (t - g) / 86400000;
+      if (days <= 1) continue;
+
+      const x = Math.log10(days), y = Math.log10(p);
+      n++; sx += x; sy += y; sxx += x * x; sxy += x * y;
+      xs.push(x); ys.push(y); ds.push(t);
+      if (n < 2) continue;
+
+      const denom = n * sxx - sx * sx;
+      if (denom === 0) continue;
+      const b = (n * sxy - sx * sy) / denom;
+      const a = (sy - b * sx) / n;
+      const resCur = y - (a + b * x);
+
+      const cutoff = t - windowMs;
+      let countLE = 0, total = 0;
+      for (let k = xs.length - 1; k >= 0 && ds[k] >= cutoff; k--) {
+        total++;
+        if (ys[k] - (a + b * xs[k]) <= resCur) countLE++;
       }
+      out[i] = total > 0 ? countLE / total : null;
+    }
+    return out;
+  },
 
-      return this.riskScore({
-        price:     d.price,
-        ma200w:    d.ma200w,
-        rsi:       d.weeklyRsi,
-        mayer:     d.mayer,
-        puell:     d.puell,
-        logPct,
-        fearGreed: d.fearGreed,
-      });
-    });
+  /* ── Per-row normalized risk inputs (0–1 each, higher = more risk) ───── */
+  // Returns one object per row with each metric mapped to a risk contribution.
+  // 'percentile' mode: expanding-window percentile (cycle-relative, no lookahead).
+  // 'fixed' mode: legacy static-range clamping with the full-history log pct.
+  buildRiskInputs(rows) {
+    const mode  = CONFIG.NORMALIZATION;
+    const ratio = rows.map(r => (r.price && r.ma200w) ? r.price / r.ma200w : null);
+    const mayer = rows.map(r => r.mayer);
+    const rsi   = rows.map(r => r.weeklyRsi);
+    const puell = rows.map(r => r.puell);
+    const fg    = rows.map(r => r.fearGreed);
+
+    let nMa, nMy, nRs, nPu, nFg, nLog;
+    if (mode === 'fixed') {
+      const R = CONFIG.RISK_RANGES;
+      nMa  = ratio.map(v => this.norm(v, R.ma200w.min, R.ma200w.max));
+      nMy  = mayer.map(v => this.norm(v, R.mayer.min,  R.mayer.max));
+      nRs  = rsi.map(v   => this.norm(v, R.rsi.min,    R.rsi.max));
+      nPu  = puell.map(v => this.norm(v, R.puell.min,  R.puell.max));
+      nFg  = fg.map(v    => this.norm(v, R.fearGreed.min, R.fearGreed.max));
+      nLog = rows.map(r  => r.logRegrPct ?? null);          // legacy full-history pct
+    } else {
+      const dates    = rows.map(r => r.date.getTime());
+      const windowMs = CONFIG.PERCENTILE_WINDOW_DAYS * 86400000;
+      nMa  = this.rollingPercentile(ratio, dates, windowMs);
+      nMy  = this.rollingPercentile(mayer, dates, windowMs);
+      nRs  = this.rollingPercentile(rsi,   dates, windowMs);
+      nPu  = this.rollingPercentile(puell, dates, windowMs);
+      nFg  = this.rollingPercentile(fg,    dates, windowMs);
+      nLog = this.walkForwardLogPct(rows, windowMs);        // trailing-window pct
+    }
+
+    return rows.map((r, i) => ({
+      ma200w: nMa[i], mayer: nMy[i], logRegr: nLog[i],
+      rsi: nRs[i], puell: nPu[i], fearGreed: nFg[i],
+    }));
+  },
+
+  /* ── Composite risk score 0 – 10 from normalized inputs ──────────────── */
+  // 'percentile' mode: weighted average across metric categories so the
+  // collinear price metrics share a single capped "valuation" weight.
+  // 'fixed' mode: legacy flat per-metric weighted average.
+  scoreFromInputs(inp) {
+    if (!inp) return null;
+
+    if (CONFIG.NORMALIZATION === 'fixed') {
+      const W = CONFIG.RISK_WEIGHTS;
+      let totalW = 0, totalS = 0;
+      for (const [k, w] of Object.entries(W)) {
+        if (inp[k] != null && !isNaN(inp[k])) { totalS += inp[k] * w; totalW += w; }
+      }
+      return totalW === 0 ? null : (totalS / totalW) * 10;
+    }
+
+    let totalW = 0, totalS = 0;
+    for (const cat of Object.values(CONFIG.RISK_CATEGORIES)) {
+      const vals = cat.metrics.map(m => inp[m]).filter(v => v != null && !isNaN(v));
+      if (!vals.length) continue;
+      const sub = vals.reduce((a, b) => a + b, 0) / vals.length;
+      totalS += sub * cat.weight;
+      totalW += cat.weight;
+    }
+    return totalW === 0 ? null : (totalS / totalW) * 10;
   },
 
   /* ── Risk label lookup ──────────────────────────────────────────────── */
@@ -302,9 +383,18 @@ const Calc = {
       }
     });
 
-    // Risk score series
-    const riskArr = this.riskScoreSeries(rows, regression, sortedRes);
-    rows.forEach((row, i) => { row.riskScore = riskArr[i]; });
+    // Risk score series (walk-forward, lookahead-free). Each row keeps its
+    // normalized inputs for transparency/debugging, and the score is gated
+    // until enough history exists for stable percentiles.
+    const inputs    = this.buildRiskInputs(rows);
+    const firstDate = rows.find(r => r.price)?.date.getTime();
+    rows.forEach((row, i) => {
+      row.riskInputs = inputs[i];
+      const ageDays  = firstDate != null ? (row.date.getTime() - firstDate) / 86400000 : 0;
+      row.riskScore  = (ageDays >= CONFIG.MIN_HISTORY_DAYS)
+        ? this.scoreFromInputs(inputs[i])
+        : null;
+    });
 
     return { rows, regression, residuals: sortedRes };
   },

@@ -49,9 +49,11 @@ function baseOptions(yLog = false, yLabel = 'USD', yMin = undefined) {
     scales: {
       x: {
         type: 'time',
-        time: { unit: 'year', tooltipFormat: 'MMM d, yyyy' },
+        // No fixed unit — Chart.js auto-selects (year for full history, down to
+        // month/week as the date-range filter narrows the window).
+        time: { tooltipFormat: 'MMM d, yyyy' },
         grid:  { color: '#1a1a2a' },
-        ticks: { maxTicksLimit: 10, color: '#4a5568' },
+        ticks: { maxTicksLimit: 10, color: '#4a5568', autoSkip: true },
       },
       y: {
         type:     yLog ? 'logarithmic' : 'linear',
@@ -414,6 +416,41 @@ const ChartRenderers = {
           },
         },
       },
+    });
+  },
+
+  /* ── Backtest: portfolio value, Plain DCA vs Score-Weighted ──────────── */
+  backtest(canvasId, result, scaleType = 'log') {
+    destroyChart(canvasId);
+    if (!result || !result.series.length) { showNoData(canvasId, 'No data in selected range'); return; }
+
+    const canvas = document.getElementById(canvasId);
+    if (canvas) canvas.style.display = '';   // un-hide if a prior run showed no-data
+    const parent = canvas?.parentElement;
+    const ph = parent?.querySelector('.no-data');
+    if (ph) ph.remove();
+
+    const pts  = thin(result.series, 2000);
+    const opts = baseOptions(scaleType === 'log', 'USD');
+
+    CHARTS[canvasId] = new Chart(canvas, {
+      type: 'line',
+      data: {
+        labels: pts.map(s => s.date),
+        datasets: [
+          {
+            label: 'Score-Weighted DCA', _fmt: 'USD',
+            data: pts.map(s => s.smartValue),
+            borderColor: CONFIG.C.green, borderWidth: 1.8, fill: false, tension: 0,
+          },
+          {
+            label: 'Plain DCA', _fmt: 'USD',
+            data: pts.map(s => s.plainValue),
+            borderColor: CONFIG.C.btc, borderWidth: 1.5, fill: false, tension: 0,
+          },
+        ],
+      },
+      options: { ...opts, plugins: { ...opts.plugins, legend: { display: true, labels: { color: '#8891a8', boxWidth: 20, font: { size: 10 } } } } },
     });
   },
 };
