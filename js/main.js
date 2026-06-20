@@ -74,18 +74,26 @@ function applyRiskColor(score) {
 /* ════════════════════════════════════════════════════════════════════════ */
 /*  UI: header price                                                        */
 /* ════════════════════════════════════════════════════════════════════════ */
-function updateHeader(priceSnap) {
+function updateHeader(priceSnap, lastRow) {
   const btc = priceSnap?.bitcoin;
-  if (!btc) return;
 
-  $('hdr-price').textContent = fmtUSD(btc.usd);
-  const chg   = btc.usd_24h_change;
-  const chgEl = $('hdr-change');
-  chgEl.textContent = (chg >= 0 ? '+' : '') + fmt(chg, 2) + '%';
-  chgEl.className   = 'hdr-change ' + (chg >= 0 ? 'pos' : 'neg');
-
-  $('hdr-mcap').textContent = fmtUSD(btc.usd_market_cap);
-  $('hdr-vol').textContent  = fmtUSD(btc.usd_24h_vol);
+  if (btc) {
+    $('hdr-price').textContent = fmtUSD(btc.usd);
+    const chg   = btc.usd_24h_change;
+    const chgEl = $('hdr-change');
+    chgEl.textContent = (chg >= 0 ? '+' : '') + fmt(chg, 2) + '%';
+    chgEl.className   = 'hdr-change ' + (chg >= 0 ? 'pos' : 'neg');
+    $('hdr-mcap').textContent = fmtUSD(btc.usd_market_cap);
+    $('hdr-vol').textContent  = fmtUSD(btc.usd_24h_vol);
+  } else if (lastRow) {
+    // CoinGecko snapshot unavailable — fall back to most recent historical close
+    $('hdr-price').textContent = fmtUSD(lastRow.price);
+    const chgEl = $('hdr-change');
+    chgEl.textContent = `as of ${lastRow.dateStr}`;
+    chgEl.className   = 'hdr-change';
+    $('hdr-mcap').textContent = fmtUSD(lastRow.marketCap);
+    $('hdr-vol').textContent  = '—';
+  }
 }
 
 /* ════════════════════════════════════════════════════════════════════════ */
@@ -109,13 +117,13 @@ function updateMetricCards(rows) {
       last.weeklyRsi < 30 ? 'buy' : last.weeklyRsi > 70 ? 'sell' : 'neutral');
   }
 
-  // MVRV
-  if (last.mvrvZ != null) {
-    setCard('mvrv', fmt(last.mvrvZ, 2),
-      last.mvrvZ < 0 ? 'Buy Zone' : last.mvrvZ > 6 ? 'Sell Zone' : 'Neutral',
-      last.mvrvZ < 0 ? 'buy' : last.mvrvZ > 6 ? 'sell' : 'neutral');
+  // Mayer Multiple
+  if (last.mayer != null) {
+    setCard('mayer', fmt(last.mayer, 2) + '×',
+      last.mayer < 0.6 ? 'Undervalued' : last.mayer > 2.4 ? 'Overheated' : 'Neutral',
+      last.mayer < 0.6 ? 'buy' : last.mayer > 2.4 ? 'sell' : 'neutral');
   } else {
-    setCard('mvrv', '—', 'Awaiting data', 'neutral');
+    setCard('mayer', '—', 'Awaiting data', 'neutral');
   }
 
   // Puell Multiple
@@ -192,7 +200,7 @@ function renderSection(section) {
     case 'dashboard':   ChartRenderers.overview('chart-overview', rows); break;
     case 'ma200w':      ChartRenderers.ma200w('chart-ma200w', rows); break;
     case 'rsi':         ChartRenderers.rsi('chart-rsi', rows); break;
-    case 'mvrv':        ChartRenderers.mvrv('chart-mvrv', rows); break;
+    case 'mayer':       ChartRenderers.mayer('chart-mayer', rows); break;
     case 'puell':       ChartRenderers.puell('chart-puell', rows); break;
     case 'logregr':     ChartRenderers.logRegression('chart-logregr', rows, regression, residuals); break;
     case 'picycle':     ChartRenderers.piCycle('chart-picycle', rows); break;
@@ -222,25 +230,30 @@ async function init() {
   try {
     setStatus('Loading price history…');
 
-    // 1 — CoinGecko price history (critical)
-    let cgData;
+    // 1 — Blockchain.info price history (critical — full genesis-to-today series)
+    let priceData;
     try {
-      cgData = await API.fetchPriceHistory();
+      priceData = await API.fetchPriceHistory();
     } catch (e) {
-      setStatus('Failed to load price data. Check network / CoinGecko API.', true);
+      setStatus('Failed to load price data. Check network / blockchain.info API.', true);
       showApp();
       return;
     }
 
-    setStatus('Loading on-chain data…');
+    setStatus('Loading market cap & miner revenue…');
 
-    // 2 — CoinMetrics (optional — MVRV & Puell)
-    const cmData = await API.fetchOnChain().catch(() => null);
+    // 2 — Market cap + miner revenue (optional — used for Puell Multiple)
+    const [mcapData, revenueData] = await Promise.all([
+      API.fetchMarketCap().catch(() => null),
+      API.fetchMinerRevenue().catch(() => null),
+    ]);
+
+    setStatus('Loading sentiment data…');
 
     // 3 — Fear & Greed (optional)
     const fgData = await API.fetchFearGreed().catch(() => null);
 
-    // 4 — Current price (optional — for header)
+    // 4 — Current price snapshot (optional — for header; falls back to last historical row)
     const priceSnap = await API.fetchCurrentPrice().catch(() => null);
 
     // 5 — Block height (optional — for halving)
@@ -249,7 +262,12 @@ async function init() {
     setStatus('Computing metrics…');
 
     // Align & compute
-    const aligned        = Calc.alignData(cgData, cmData, fgData);
+    const aligned = Calc.alignData(priceData, mcapData, revenueData, fgData);
+    if (!aligned.length) {
+      setStatus('No historical data returned — blockchain.info API may be unavailable.', true);
+      showApp();
+      return;
+    }
     const { rows, regression, residuals } = Calc.computeAll(aligned);
 
     State.rows       = rows;
@@ -265,7 +283,7 @@ async function init() {
         price:     last.price,
         ma200w:    last.ma200w,
         rsi:       last.weeklyRsi,
-        mvrvZ:     last.mvrvZ,
+        mayer:     last.mayer,
         puell:     last.puell,
         logPct,
         fearGreed: lastFG?.fearGreed ?? null,
@@ -277,7 +295,7 @@ async function init() {
 
     // 6 — Render UI
     showApp();
-    updateHeader(priceSnap);
+    updateHeader(priceSnap, last);
     updateMetricCards(rows);
     updateHalving(State.halvingInfo);
     applyRiskColor(State.currentRisk ?? 5);

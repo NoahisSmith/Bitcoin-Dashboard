@@ -17,7 +17,7 @@ const CONFIG = {
   RISK_WEIGHTS: {
     ma200w:    0.20,
     rsi:       0.15,
-    mvrv:      0.25,
+    mayer:     0.25,
     puell:     0.20,
     logRegr:   0.15,
     fearGreed: 0.05,
@@ -27,7 +27,7 @@ const CONFIG = {
   RISK_RANGES: {
     ma200w:    { min: 0.75,  max: 3.5  },   // price / 200W MA ratio
     rsi:       { min: 20,    max: 90   },   // weekly RSI
-    mvrv:      { min: -1,    max: 7    },   // MVRV Z-Score
+    mayer:     { min: 0.6,   max: 2.4  },   // Mayer Multiple (price / 200D MA)
     puell:     { min: 0.3,   max: 4.0  },   // Puell Multiple
     logRegr:   { min: 0,     max: 1    },   // percentile (0–1)
     fearGreed: { min: 5,     max: 95   },   // F&G Index (0–100)

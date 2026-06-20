@@ -240,18 +240,17 @@ const ChartRenderers = {
     });
   },
 
-  /* ── MVRV Z-Score ────────────────────────────────────────────────────── */
-  mvrv(canvasId, rows) {
+  /* ── Mayer Multiple ──────────────────────────────────────────────────── */
+  mayer(canvasId, rows) {
     destroyChart(canvasId);
-    const pts = thin(rows.filter(r => r.mvrvZ != null));
-    if (pts.length === 0) { showNoData(canvasId, 'MVRV data unavailable (CoinMetrics offline)'); return; }
+    const pts = thin(rows.filter(r => r.mayer != null));
+    if (pts.length === 0) { showNoData(canvasId, 'Mayer Multiple data unavailable'); return; }
     const opts = baseOptions(false, 'NUM');
 
     opts.plugins.annotation.annotations = {
-      ...hZone('top',  6,  20,  '#ef4444', 'Sell Zone >6'),
-      ...hZone('mid',  3.5, 6,  '#f97316'),
-      ...hZone('buy', -5,   0,  '#10b981', 'Buy Zone <0'),
-      ...hLine('z0', 0, '#4a5568'),
+      ...hZone('sell', 2.4, 6,   '#ef4444', 'Overheated >2.4'),
+      ...hZone('buy',  0,   0.6, '#10b981', 'Undervalued <0.6'),
+      ...hLine('one', 1, '#4a5568'),
     };
 
     CHARTS[canvasId] = new Chart(document.getElementById(canvasId), {
@@ -259,8 +258,8 @@ const ChartRenderers = {
       data: {
         labels: pts.map(r => r.date),
         datasets: [{
-          label: 'MVRV Z-Score', _fmt: 'NUM',
-          data: pts.map(r => r.mvrvZ),
+          label: 'Mayer Multiple', _fmt: 'NUM',
+          data: pts.map(r => r.mayer),
           borderColor: CONFIG.C.blue,
           borderWidth: 1.5, fill: false, tension: 0.1,
         }],

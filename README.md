@@ -8,7 +8,7 @@ A free, static Bitcoin metrics dashboard deployable to **GitHub Pages** — no b
 |---|---|
 | **200 Week MA Heatmap** | Price coloured by distance from 200W MA — never-broken cycle bottom indicator |
 | **Weekly RSI** | 14-period RSI on weekly closes (Wilder's smoothing) |
-| **MVRV Z-Score** | (Market Cap − Realized Cap) / σ — best on-chain cycle indicator |
+| **Mayer Multiple** | Price ÷ 200-day MA — over/undervaluation vs trend |
 | **Puell Multiple** | Daily miner revenue ÷ 365d MA — miner capitulation & euphoria |
 | **Log Regression + Quantile Fan** | Power-law regression bands (10th – 90th percentile) |
 | **Pi Cycle Top** | 111 DMA vs 2× 350 DMA crossover — historical top signal |
@@ -18,12 +18,26 @@ A free, static Bitcoin metrics dashboard deployable to **GitHub Pages** — no b
 
 | Source | Endpoint | Used for |
 |---|---|---|
-| [CoinGecko](https://coingecko.com) | `/coins/bitcoin/market_chart` | Full price + market cap history |
-| [CoinMetrics Community](https://coinmetrics.io) | `/v4/timeseries/asset-metrics` | Realized cap + miner revenue |
-| [Alternative.me](https://alternative.me) | `/fng/` | Fear & Greed Index |
+| [Blockchain.info](https://blockchain.info) | `/charts/market-price` | Full daily price history (genesis → today) |
+| [Blockchain.info](https://blockchain.info) | `/charts/market-cap` | Market capitalization history |
+| [Blockchain.info](https://blockchain.info) | `/charts/miners-revenue` | Daily miner revenue (for Puell Multiple) |
 | [Blockchain.info](https://blockchain.info) | `/q/getblockcount` | Current block height (halving countdown) |
+| [CoinGecko](https://coingecko.com) | `/simple/price` | Live price snapshot for the header (24h change, volume) |
+| [Alternative.me](https://alternative.me) | `/fng/` | Fear & Greed Index |
 
 All responses are cached in `localStorage` for **15 minutes** to respect rate limits.
+
+### Why blockchain.info instead of CoinGecko for history?
+
+The original version of this dashboard used CoinGecko's `/market_chart?days=max` endpoint for full price history. CoinGecko has since restricted that endpoint on the free tier to the **trailing 365 days** (`error_code 10012`), which silently breaks any indicator needing multi-year data — the 200W MA, log regression, and Pi Cycle Top all need it. Blockchain.info's charts API has offered free, keyless, unrestricted full-history daily series for years and has no documented historical cap, so it's now the backbone data source. CoinGecko is still used for the live header price/24h-change snapshot, since that's a lightweight, non-historical call unaffected by the restriction.
+
+### Why Mayer Multiple instead of MVRV Z-Score?
+
+True MVRV Z-Score needs a **realized cap** series (the aggregate price at which each coin last moved on-chain). That data historically came free from CoinMetrics' Community API. CoinMetrics has since restricted price/cap metrics on its free, keyless tier to a handful of recent data points, so there's no longer a reliable *free, keyless, full-history* realized-cap source. Rather than ship a broken or faked metric, this dashboard uses the **Mayer Multiple** (price ÷ 200-day MA) instead — a simpler but well-established indicator that targets a similar "how stretched is price from trend" signal, fully derivable from price data alone.
+
+If you want true MVRV Z-Score, you have two options:
+1. **Register a free API key** with [BGeometrics](https://bitcoin-data.com) (formerly bitcoin-data.com), which offers a free tier (~8 req/hour) that includes a pre-computed MVRV Z-Score endpoint. Add the key to `js/config.js` and wire up a new `API.fetchMVRV()` call following the existing `fetchFearGreed()` pattern, then merge it into `Calc.alignData()`.
+2. **Use a paid provider** (Glassnode, CoinMetrics Pro, Coin Metrics Network Data Pro) if you need institutional-grade realized cap history.
 
 ---
 
@@ -68,7 +82,7 @@ bitcoin-metrics/
 ├── js/
 │   ├── config.js       ← Risk weights, DCA table, constants
 │   ├── api.js          ← API fetching + localStorage cache
-│   ├── calculations.js ← MA, RSI, MVRV, Puell, log regression
+│   ├── calculations.js ← MA, RSI, Mayer, Puell, log regression
 │   ├── charts.js       ← Chart.js renderers (one per metric)
 │   └── main.js         ← App orchestration, navigation, UI
 └── README.md
@@ -84,12 +98,12 @@ The composite **0–10 risk score** is a weighted average of six normalized sub-
 |---|---|---|---|
 | 200W MA Multiple (price/MA) | 20% | ratio < 0.75 | ratio > 3.5 |
 | Weekly RSI | 15% | RSI < 20 | RSI > 90 |
-| MVRV Z-Score | 25% | Z < −1 | Z > 7 |
+| Mayer Multiple | 25% | ratio < 0.6 | ratio > 2.4 |
 | Puell Multiple | 20% | Puell < 0.3 | Puell > 4.0 |
 | Log Regression Percentile | 15% | 0th %ile | 100th %ile |
 | Fear & Greed Index | 5% | F&G < 5 | F&G > 95 |
 
-Each metric is linearly scaled to [0, 1] and then multiplied by its weight. The final composite is multiplied by 10 to give a 0–10 score.
+Each metric is linearly scaled to [0, 1] and then multiplied by its weight. The final composite is multiplied by 10 to give a 0–10 score. If a metric is temporarily unavailable (e.g. an API is down), its weight is dropped and the remaining weights are renormalized — the score never silently breaks.
 
 ### DCA Allocation Guide
 
@@ -116,7 +130,7 @@ In `js/config.js`, adjust `RISK_WEIGHTS` (values must sum to 1.0):
 RISK_WEIGHTS: {
   ma200w:    0.25,   // increase 200W MA weight
   rsi:       0.10,
-  mvrv:      0.30,   // MVRV is most historically reliable
+  mayer:     0.30,
   puell:     0.20,
   logRegr:   0.10,
   fearGreed: 0.05,
@@ -144,14 +158,15 @@ if (State.currentRisk < 2) {
 
 ## Known Limitations
 
-- **MVRV & Puell** require [CoinMetrics Community API](https://coinmetrics.io) to be reachable. If it's down, those cards show `—` and the risk score uses the remaining four metrics.
-- CoinGecko free tier has strict rate limits — the 15-minute cache prevents most issues.
+- **Puell Multiple** depends on blockchain.info's `miners-revenue` chart. If that endpoint is ever unreachable, the Puell card shows `—` and the risk score renormalizes across the remaining five metrics.
+- **Mayer Multiple replaces MVRV Z-Score** for the reasons explained above — see that section if you want to wire in true MVRV via a registered provider.
+- Free, keyless APIs can and do change their terms over time (this rebuild exists because CoinGecko and CoinMetrics both tightened their free tiers). If a chart stops updating, open the browser console first — it will show which fetch failed — then check that provider's current API docs before assuming the dashboard code is at fault.
 - Log regression extends across all BTC history from the genesis block. Very early data (2009–2012) has sparse trading history and should be viewed as an approximation.
 
 ---
 
 ## Disclaimer
 
-This dashboard is for **educational and research purposes only**.  
-Nothing here constitutes financial advice. Bitcoin is highly volatile.  
+This dashboard is for **educational and research purposes only**.
+Nothing here constitutes financial advice. Bitcoin is highly volatile.
 Always do your own research before making investment decisions.

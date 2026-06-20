@@ -32,21 +32,31 @@ const API = {
     }
   },
 
-  /* ── CoinGecko: full daily price history ─────────────────────────────── */
-  async fetchPriceHistory() {
-    const key = 'cg_price_max';
+  /* ── Blockchain.com Charts API: free, keyless, FULL history ────────────
+     Backbone data source for this dashboard. CoinGecko's free tier now
+     caps historical lookback at 365 days (error_code 10012) and
+     CoinMetrics' Community tier has similarly restricted price/cap
+     metrics, so blockchain.info's charts endpoint — public since ~2014,
+     no key, no documented rate limit — is the most reliable free source
+     for genesis-to-today daily series. Same `/charts/$name` shape is
+     reused for price, market cap, and miner revenue. ───────────────────── */
+  async fetchBlockchainChart(chartName) {
+    const key = `bc_chart_${chartName}`;
     const cached = this._getCache(key);
     if (cached) return cached;
 
-    // CoinGecko free tier — no key required; daily granularity with days=max
-    const url = 'https://api.coingecko.com/api/v3/coins/bitcoin/market_chart'
-              + '?vs_currency=usd&days=max&interval=daily';
+    const url = `https://api.blockchain.info/charts/${chartName}`
+              + `?timespan=all&format=json&sampled=false`;
     const data = await this._fetch(url);
     this._setCache(key, data);
     return data;
   },
 
-  /* ── CoinGecko: current price snapshot ───────────────────────────────── */
+  async fetchPriceHistory()  { return this.fetchBlockchainChart('market-price'); },
+  async fetchMarketCap()     { return this.fetchBlockchainChart('market-cap'); },
+  async fetchMinerRevenue()  { return this.fetchBlockchainChart('miners-revenue'); },
+
+  /* ── CoinGecko: current price snapshot (not historical — unaffected) ──── */
   async fetchCurrentPrice() {
     const key = 'cg_price_now';
     const cached = this._getCache(key);
@@ -55,28 +65,12 @@ const API = {
     const url = 'https://api.coingecko.com/api/v3/simple/price'
               + '?ids=bitcoin&vs_currencies=usd'
               + '&include_market_cap=true&include_24hr_vol=true&include_24hr_change=true';
-    const data = await this._fetch(url);
-    this._setCache(key, data);
-    return data;
-  },
-
-  /* ── CoinMetrics Community: realized cap + miner revenue ─────────────── */
-  async fetchOnChain() {
-    const key = 'cm_onchain';
-    const cached = this._getCache(key);
-    if (cached) return cached;
-
-    // Community API — free, no key, 10 k rows covers all of BTC history
-    const metrics = 'CapRealUSD,RevUSD';
-    const url = `https://community-api.coinmetrics.io/v4/timeseries/asset-metrics`
-              + `?assets=btc&metrics=${metrics}&frequency=1d`
-              + `&start_time=2010-07-01&page_size=10000`;
     try {
       const data = await this._fetch(url);
       this._setCache(key, data);
       return data;
     } catch (e) {
-      console.warn('CoinMetrics unavailable:', e.message);
+      console.warn('CoinGecko snapshot unavailable:', e.message);
       return null;
     }
   },
@@ -98,7 +92,7 @@ const API = {
     }
   },
 
-  /* ── Blockchain.com: halving block estimation ────────────────────────── */
+  /* ── Blockchain.info: halving block estimation ────────────────────────── */
   async fetchBlockHeight() {
     const key = 'bc_height';
     const cached = this._getCache(key);

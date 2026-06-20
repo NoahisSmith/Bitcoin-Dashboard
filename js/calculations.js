@@ -93,27 +93,22 @@ const Calc = {
       : s[lo];
   },
 
-  /* ── MVRV Z-Score ───────────────────────────────────────────────────── */
-  // Z = (MarketCap − RealizedCap) / StdDev(MarketCap over full history)
-  mvrvZSeries(marketCaps, realizedCaps) {
-    const valid = [];
-    for (let i = 0; i < marketCaps.length; i++) {
-      if (marketCaps[i] != null && realizedCaps[i] != null) {
-        valid.push(marketCaps[i]);
-      }
-    }
-    const mean = valid.reduce((s, v) => s + v, 0) / valid.length;
-    const std  = Math.sqrt(valid.reduce((s, v) => s + (v - mean) ** 2, 0) / valid.length);
-
-    const out = [];
-    for (let i = 0; i < marketCaps.length; i++) {
-      if (marketCaps[i] != null && realizedCaps[i] != null && std > 0) {
-        out.push((marketCaps[i] - realizedCaps[i]) / std);
-      } else {
-        out.push(null);
-      }
-    }
-    return out;
+  /* ── Mayer Multiple ─────────────────────────────────────────────────── */
+  // price / 200-day SMA. Free-data-derivable cycle indicator used here in
+  // place of MVRV Z-Score: true MVRV needs a "realized cap" series (price
+  // at which each coin last moved), which historically came from
+  // CoinMetrics' free Community API. That tier has since restricted
+  // price/cap metrics to a handful of recent data points, so there is no
+  // longer a reliable *free, keyless, full-history* realized-cap source.
+  // Mayer Multiple captures a similar "how stretched is price vs its
+  // trend" signal using only price data, which we can source reliably.
+  // See README for how to wire in a paid/registered MVRV provider instead.
+  mayerSeries(prices) {
+    const sma200d = this.sma(prices, 200);
+    return prices.map((p, i) => (p != null && sma200d[i] != null && sma200d[i] > 0)
+      ? p / sma200d[i]
+      : null
+    );
   },
 
   /* ── Puell Multiple ─────────────────────────────────────────────────── */
@@ -142,14 +137,14 @@ const Calc = {
   },
 
   /* ── Composite risk score 0 – 10 ────────────────────────────────────── */
-  riskScore({ price, ma200w, rsi, mvrvZ, puell, logPct, fearGreed }) {
+  riskScore({ price, ma200w, rsi, mayer, puell, logPct, fearGreed }) {
     const W = CONFIG.RISK_WEIGHTS;
     const R = CONFIG.RISK_RANGES;
 
     const scores = {
       ma200w:    price && ma200w ? this.norm(price / ma200w, R.ma200w.min, R.ma200w.max) : null,
       rsi:       this.norm(rsi,       R.rsi.min,       R.rsi.max),
-      mvrv:      this.norm(mvrvZ,     R.mvrv.min,      R.mvrv.max),
+      mayer:     this.norm(mayer,     R.mayer.min,     R.mayer.max),
       puell:     this.norm(puell,     R.puell.min,     R.puell.max),
       logRegr:   logPct,
       fearGreed: this.norm(fearGreed, R.fearGreed.min, R.fearGreed.max),
@@ -183,7 +178,7 @@ const Calc = {
         price:     d.price,
         ma200w:    d.ma200w,
         rsi:       d.weeklyRsi,
-        mvrvZ:     d.mvrvZ,
+        mayer:     d.mayer,
         puell:     d.puell,
         logPct,
         fearGreed: d.fearGreed,
@@ -208,67 +203,60 @@ const Calc = {
     return { nextHalving, blocksLeft, daysLeft };
   },
 
-  /* ── Align multi-source data by date ────────────────────────────────── */
-  alignData(cgData, cmData, fgData) {
-    // Build date-keyed map from CoinGecko (primary)
+  /* ── Align blockchain.info chart series + Fear & Greed by date ───────── */
+  // Each blockchain.info chart returns { values: [{ x: unixSeconds, y }] }.
+  // Price is the backbone series (most complete); market cap and miner
+  // revenue are merged onto it by day. Timestamps occasionally drift by a
+  // few hours between charts, so we bucket everything to a UTC date string.
+  alignData(priceData, mcapData, revenueData, fgData) {
     const map = new Map();
 
-    const prices     = cgData.prices      || [];
-    const marketCaps = cgData.market_caps || [];
-    const volumes    = cgData.total_volumes || [];
+    const toDateStr = unixSeconds => new Date(unixSeconds * 1000).toISOString().slice(0, 10);
 
-    prices.forEach(([ts, price], i) => {
-      const date    = new Date(ts);
-      const dateStr = date.toISOString().slice(0, 10);
+    (priceData?.values || []).forEach(({ x, y }) => {
+      if (y == null || y <= 0) return; // pre-exchange days where price is 0
+      const dateStr = toDateStr(x);
       map.set(dateStr, {
-        date,
+        date:      new Date(dateStr + 'T00:00:00Z'),
         dateStr,
-        price,
-        marketCap: marketCaps[i]?.[1] ?? null,
-        volume:    volumes[i]?.[1]    ?? null,
-        realizedCap:  null,
+        price:     y,
+        marketCap:    null,
         minerRevenue: null,
         fearGreed:    null,
         // calculated later:
         ma200w:    null,
         weeklyRsi: null,
-        mvrvZ:     null,
+        mayer:     null,
         puell:     null,
         riskScore: null,
       });
     });
 
-    // Merge CoinMetrics on-chain data
-    if (cmData?.data) {
-      cmData.data.forEach(row => {
-        const dateStr = row.time.slice(0, 10);
-        const entry   = map.get(dateStr);
-        if (entry) {
-          entry.realizedCap  = parseFloat(row.CapRealUSD) || null;
-          entry.minerRevenue = parseFloat(row.RevUSD)     || null;
-        }
-      });
-    }
+    (mcapData?.values || []).forEach(({ x, y }) => {
+      const entry = map.get(toDateStr(x));
+      if (entry) entry.marketCap = y;
+    });
+
+    (revenueData?.values || []).forEach(({ x, y }) => {
+      const entry = map.get(toDateStr(x));
+      if (entry) entry.minerRevenue = y;
+    });
 
     // Merge Fear & Greed (timestamps are Unix seconds)
     if (fgData?.data) {
       fgData.data.forEach(row => {
-        const dateStr = new Date(parseInt(row.timestamp) * 1000).toISOString().slice(0, 10);
-        const entry   = map.get(dateStr);
+        const entry = map.get(toDateStr(parseInt(row.timestamp)));
         if (entry) entry.fearGreed = parseInt(row.value);
       });
     }
 
-    // Sort chronologically
     return Array.from(map.values()).sort((a, b) => a.date - b.date);
   },
 
   /* ── Main pipeline: derive all metrics on aligned array ──────────────── */
   computeAll(rows) {
     const prices     = rows.map(r => r.price);
-    const mktCaps    = rows.map(r => r.marketCap);
-    const realCaps   = rows.map(r => r.realizedCap);
-    const revenues   = rows.map(r => r.minerRevenue);
+    const revenues    = rows.map(r => r.minerRevenue);
     const dates      = rows.map(r => r.dateStr);
 
     // 200 Week MA
@@ -277,8 +265,8 @@ const Calc = {
     // Puell Multiple
     const puellArr  = this.puellSeries(revenues);
 
-    // MVRV Z-Score
-    const mvrvArr   = this.mvrvZSeries(mktCaps, realCaps);
+    // Mayer Multiple
+    const mayerArr  = this.mayerSeries(prices);
 
     // Log regression (on full price history)
     const regression = this.logRegression(dates, prices);
@@ -298,7 +286,7 @@ const Calc = {
     rows.forEach((row, i) => {
       row.ma200w    = ma200wArr[i];
       row.puell     = puellArr[i];
-      row.mvrvZ     = mvrvArr[i];
+      row.mayer     = mayerArr[i];
       row.weeklyRsi = wRsiMap.get(row.dateStr) ?? null;
       row.piM111    = m111[i];
       row.piM350x2  = m350x2[i];
