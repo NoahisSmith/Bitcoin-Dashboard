@@ -234,8 +234,14 @@ async function init() {
     let priceData;
     try {
       priceData = await API.fetchPriceHistory();
+      if (!priceData?.values?.length) throw new Error('Empty response');
     } catch (e) {
-      setStatus('Failed to load price data. Check network / blockchain.info API.', true);
+      console.error('Price history fetch failed:', e);
+      setStatus(
+        `Failed to load price data (${e.message}). Open the browser console for details, `
+        + `or test the URL directly: api.blockchain.info/charts/market-price`,
+        true
+      );
       showApp();
       return;
     }

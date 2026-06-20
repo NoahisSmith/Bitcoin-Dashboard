@@ -45,8 +45,11 @@ const API = {
     const cached = this._getCache(key);
     if (cached) return cached;
 
+    // cors=true is required on every blockchain.info call to get the
+    // Access-Control-Allow-Origin header — without it, browsers block
+    // the response even though the request itself succeeds.
     const url = `https://api.blockchain.info/charts/${chartName}`
-              + `?timespan=all&format=json&sampled=false`;
+              + `?timespan=all&format=json&sampled=false&cors=true`;
     const data = await this._fetch(url);
     this._setCache(key, data);
     return data;
