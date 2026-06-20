@@ -100,56 +100,77 @@ function updateHeader(priceSnap, lastRow) {
 /*  UI: metric cards                                                        */
 /* ════════════════════════════════════════════════════════════════════════ */
 function updateMetricCards(rows) {
-  const last = [...rows].reverse().find(r => r.price);
-  if (!last) return;
+  // Different metrics go stale on different days (weekly RSI only has a
+  // value once every 7 days; Puell depends on miner-revenue data that
+  // often lags price by a day or more), so each card looks up the most
+  // recent row where ITS OWN field is populated, rather than all reading
+  // off one single "latest" row that may be missing some of them.
+  const findLatest = field => [...rows].reverse().find(r => r[field] != null);
+
+  const latestPrice = findLatest('price');
+  if (!latestPrice) return;
 
   // 200 WMA
-  if (last.ma200w) {
-    const mult = last.price / last.ma200w;
-    setCard('ma200w', fmtUSD(last.ma200w), fmt(mult, 2) + '× MA',
+  const latestMA = findLatest('ma200w');
+  if (latestMA) {
+    const mult = latestPrice.price / latestMA.ma200w;
+    setCard('ma200w', fmtUSD(latestMA.ma200w), fmt(mult, 2) + '× MA',
       mult < 1 ? 'buy' : mult < 2 ? 'neutral' : mult < 3.5 ? 'caution' : 'sell');
   }
 
   // Weekly RSI
-  if (last.weeklyRsi != null) {
-    setCard('rsi', fmt(last.weeklyRsi, 1),
-      last.weeklyRsi < 30 ? 'Oversold' : last.weeklyRsi > 70 ? 'Overbought' : 'Neutral',
-      last.weeklyRsi < 30 ? 'buy' : last.weeklyRsi > 70 ? 'sell' : 'neutral');
+  const latestRsi = findLatest('weeklyRsi');
+  if (latestRsi) {
+    const v = latestRsi.weeklyRsi;
+    setCard('rsi', fmt(v, 1),
+      v < 30 ? 'Oversold' : v > 70 ? 'Overbought' : 'Neutral',
+      v < 30 ? 'buy' : v > 70 ? 'sell' : 'neutral');
+  } else {
+    setCard('rsi', '—', 'Awaiting data', 'neutral');
   }
 
   // Mayer Multiple
-  if (last.mayer != null) {
-    setCard('mayer', fmt(last.mayer, 2) + '×',
-      last.mayer < 0.6 ? 'Undervalued' : last.mayer > 2.4 ? 'Overheated' : 'Neutral',
-      last.mayer < 0.6 ? 'buy' : last.mayer > 2.4 ? 'sell' : 'neutral');
+  const latestMayer = findLatest('mayer');
+  if (latestMayer) {
+    const v = latestMayer.mayer;
+    setCard('mayer', fmt(v, 2) + '×',
+      v < 0.6 ? 'Undervalued' : v > 2.4 ? 'Overheated' : 'Neutral',
+      v < 0.6 ? 'buy' : v > 2.4 ? 'sell' : 'neutral');
   } else {
     setCard('mayer', '—', 'Awaiting data', 'neutral');
   }
 
   // Puell Multiple
-  if (last.puell != null) {
-    setCard('puell', fmt(last.puell, 2),
-      last.puell < 0.5 ? 'Buy Zone' : last.puell > 4 ? 'Sell Zone' : 'Neutral',
-      last.puell < 0.5 ? 'buy' : last.puell > 4 ? 'sell' : 'neutral');
+  const latestPuell = findLatest('puell');
+  if (latestPuell) {
+    const v = latestPuell.puell;
+    setCard('puell', fmt(v, 2),
+      v < 0.5 ? 'Buy Zone' : v > 4 ? 'Sell Zone' : 'Neutral',
+      v < 0.5 ? 'buy' : v > 4 ? 'sell' : 'neutral');
   } else {
     setCard('puell', '—', 'Awaiting data', 'neutral');
   }
 
   // Log Regression
-  if (last.logRegrPct != null) {
-    const pct = (last.logRegrPct * 100).toFixed(0);
+  const latestLog = findLatest('logRegrPct');
+  if (latestLog) {
+    const pct = (latestLog.logRegrPct * 100).toFixed(0);
     setCard('logregr', pct + 'th %ile',
-      last.logRegrPct < 0.25 ? 'Undervalued' : last.logRegrPct > 0.75 ? 'Overvalued' : 'Fair value',
-      last.logRegrPct < 0.25 ? 'buy' : last.logRegrPct > 0.75 ? 'sell' : 'neutral');
+      latestLog.logRegrPct < 0.25 ? 'Undervalued' : latestLog.logRegrPct > 0.75 ? 'Overvalued' : 'Fair value',
+      latestLog.logRegrPct < 0.25 ? 'buy' : latestLog.logRegrPct > 0.75 ? 'sell' : 'neutral');
+  } else {
+    setCard('logregr', '—', 'Awaiting data', 'neutral');
   }
 
-  // Fear & Greed (find most recent)
-  const lastFG = [...rows].reverse().find(r => r.fearGreed != null);
-  if (lastFG) {
-    const v = lastFG.fearGreed;
+  // Fear & Greed
+  const latestFG = findLatest('fearGreed');
+  if (latestFG) {
+    const v = latestFG.fearGreed;
     const cls = v < 25 ? 'buy' : v > 75 ? 'sell' : 'neutral';
     const lbl = v < 25 ? 'Extreme Fear' : v < 45 ? 'Fear' : v > 75 ? 'Extreme Greed' : v > 55 ? 'Greed' : 'Neutral';
     setCard('fear', v + ' / 100', lbl, cls);
+  } else {
+    setCard('fear', '—', 'Awaiting data', 'neutral');
   }
 }
 
@@ -280,19 +301,21 @@ async function init() {
     State.regression = regression;
     State.residuals  = residuals;
 
-    // Current metrics
-    const last = [...rows].reverse().find(r => r.price);
+    // Current metrics — each field looked up independently since weekly
+    // RSI and Puell aren't populated on every single daily row (see
+    // updateMetricCards for why), so a single "last row" misses them
+    // most days and silently drops them from the weighted risk score.
+    const findLatest = field => [...rows].reverse().find(r => r[field] != null);
+    const last = findLatest('price');
     if (last) {
-      const logPct = last.logRegrPct ?? null;
-      const lastFG = [...rows].reverse().find(r => r.fearGreed != null);
       State.currentRisk = Calc.riskScore({
         price:     last.price,
-        ma200w:    last.ma200w,
-        rsi:       last.weeklyRsi,
-        mayer:     last.mayer,
-        puell:     last.puell,
-        logPct,
-        fearGreed: lastFG?.fearGreed ?? null,
+        ma200w:    findLatest('ma200w')?.ma200w ?? null,
+        rsi:       findLatest('weeklyRsi')?.weeklyRsi ?? null,
+        mayer:     findLatest('mayer')?.mayer ?? null,
+        puell:     findLatest('puell')?.puell ?? null,
+        logPct:    findLatest('logRegrPct')?.logRegrPct ?? null,
+        fearGreed: findLatest('fearGreed')?.fearGreed ?? null,
       });
     }
 
