@@ -400,8 +400,19 @@
             <span>Weekly amount ($)</span>
             <input type="number" id="bt-amount" value="100" min="1" step="10">
           </label>
+          <label class="bt-field">
+            <span>Fee per trade (%)</span>
+            <input type="number" id="bt-fee" value="0" min="0" step="0.05">
+          </label>
+          <label class="bt-field">
+            <span>Sell proceeds</span>
+            <div class="tune-norm">
+              <button class="tune-norm-btn bt-sell-btn active" data-sell="hold">Hold cash</button>
+              <button class="tune-norm-btn bt-sell-btn" data-sell="rotate">Rotate</button>
+            </div>
+          </label>
           <button class="bt-run" id="bt-run">Run</button>
-          <span class="bt-hint">Simulation window follows the global date range above.</span>
+          <span class="bt-hint">Window follows the global date range. <strong>Rotate</strong> redeploys sell proceeds back into later buy signals instead of holding cash.</span>
         </div>
 
         <!-- Risk-score tuning -->
@@ -434,7 +445,10 @@
               <span>Maximize</span>
               <select id="opt-objective">
                 <option value="risk">Risk-adjusted (ROI ÷ drawdown)</option>
-                <option value="roi">Return on capital</option>
+                <option value="sharpe">Sharpe ratio</option>
+                <option value="sortino">Sortino ratio</option>
+                <option value="irr">Annualized return (IRR)</option>
+                <option value="roi">Total return</option>
                 <option value="btc">BTC per $1k</option>
                 <option value="value">Final value</option>
               </select>
@@ -459,6 +473,7 @@
         <div class="chart-legend">
           <div class="legend-item"><div class="legend-swatch" style="background:#10b981"></div>Score-Weighted DCA</div>
           <div class="legend-item"><div class="legend-swatch" style="background:#f7931a"></div>Plain DCA</div>
+          <div class="legend-item"><div class="legend-dash" style="border-color:#3b82f6"></div>Lump-Sum (buy &amp; hold)</div>
         </div>
 
         <div class="bt-stats" id="bt-stats"></div>

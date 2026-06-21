@@ -446,6 +446,11 @@ const ChartRenderers = {
             data: pts.map(s => s.plainValue),
             borderColor: CONFIG.C.btc, borderWidth: 1.5, fill: false, tension: 0,
           },
+          {
+            label: 'Lump-Sum', _fmt: 'USD',
+            data: pts.map(s => s.lumpValue),
+            borderColor: CONFIG.C.blue, borderWidth: 1.2, borderDash: [5, 3], fill: false, tension: 0,
+          },
         ],
       },
       options: { ...opts, plugins: { ...opts.plugins, legend: { display: true, labels: { color: '#8891a8', boxWidth: 20, font: { size: 10 } } } } },

@@ -358,16 +358,22 @@ function renderSection(section) {
 /* ════════════════════════════════════════════════════════════════════════ */
 /*  Backtest                                                                */
 /* ════════════════════════════════════════════════════════════════════════ */
+// Current backtest options shared by the chart and the optimizer.
+function backtestOpts() {
+  return {
+    weeklyAmount: $('bt-amount')?.value,
+    feePct:       $('bt-fee')?.value,
+    rotate:       document.querySelector('.bt-sell-btn.active')?.dataset.sell === 'rotate',
+    startDate:    State.dateRange.start,
+    endDate:      State.dateRange.end,
+  };
+}
+
 function renderBacktest() {
   const { rows } = State;
   if (!rows.length) return;
 
-  // The simulation window follows the global date range.
-  const result = Backtest.run(rows, {
-    weeklyAmount: $('bt-amount')?.value,
-    startDate:    State.dateRange.start,
-    endDate:      State.dateRange.end,
-  });
+  const result = Backtest.run(rows, backtestOpts());
   State.lastBacktest = result;
 
   ChartRenderers.backtest('chart-backtest', result, State.scalePrefs.backtest);
@@ -379,26 +385,54 @@ function renderBacktestStats(result) {
   if (!el) return;
   if (!result || !result.summary) { el.innerHTML = '<div class="bt-empty">No data in the selected range.</div>'; return; }
 
-  const { plain, smart } = result.summary;
-  const pct  = v => v == null ? '—' : (v >= 0 ? '+' : '') + (v * 100).toFixed(1) + '%';
-  const btc  = v => v == null ? '—' : v.toFixed(4) + ' ₿';
-  const win  = (a, b) => a > b ? 'pos' : a < b ? 'neg' : '';
+  const { plain, smart, lump, years } = result.summary;
+  const cols = [plain, smart, lump];
 
-  const stat = (label, plainVal, smartVal, smartCls) => `
-    <div class="bt-stat">
-      <div class="bt-stat-label">${label}</div>
-      <div class="bt-stat-row"><span>Plain</span><strong>${plainVal}</strong></div>
-      <div class="bt-stat-row"><span>Weighted</span><strong class="${smartCls}">${smartVal}</strong></div>
-    </div>`;
+  const pct = v => v == null ? '—' : (v >= 0 ? '+' : '') + (v * 100).toFixed(1) + '%';
+  const usd = v => v == null ? '—' : fmtUSD(v);
+  const btc = v => v == null ? '—' : v.toFixed(4) + ' ₿';
+  const num = v => v == null ? '—' : v.toFixed(2);
 
-  el.innerHTML =
-    stat('Capital deployed', fmtUSD(plain.deployed), fmtUSD(smart.deployed), '') +
-    stat('BTC stacked',      btc(plain.btc),         btc(smart.btc),        win(smart.btc, plain.btc)) +
-    stat('Portfolio value',  fmtUSD(plain.value),    fmtUSD(smart.value),   win(smart.value, plain.value)) +
-    stat('Return on capital', pct(plain.roi),        pct(smart.roi),        win(smart.roi, plain.roi)) +
-    stat('Max drawdown',     pct(plain.maxDrawdown), pct(smart.maxDrawdown), win(plain.maxDrawdown, smart.maxDrawdown)) +
-    stat('Realized cash',    '—',                    fmtUSD(smart.proceeds), '') +
-    `<div class="bt-note">${result.periods.toLocaleString()} weekly periods simulated. "Weighted" portfolio value includes realized cash from sells.</div>`;
+  // dir: +1 higher is better, -1 lower is better, 0 no winner
+  const rows = [
+    { label: 'Capital deployed',  fmt: usd, get: s => s.deployed,    dir:  0 },
+    { label: 'BTC stacked',       fmt: btc, get: s => s.btc,         dir:  1 },
+    { label: 'Portfolio value',   fmt: usd, get: s => s.value,       dir:  1 },
+    { label: 'Total return',      fmt: pct, get: s => s.roi,         dir:  1 },
+    { label: 'Annualized (IRR)',  fmt: pct, get: s => s.irr,         dir:  1 },
+    { label: 'Volatility (ann.)', fmt: pct, get: s => s.vol,         dir: -1 },
+    { label: 'Sharpe',            fmt: num, get: s => s.sharpe,      dir:  1 },
+    { label: 'Sortino',           fmt: num, get: s => s.sortino,     dir:  1 },
+    { label: 'Max drawdown',      fmt: pct, get: s => s.maxDrawdown, dir: -1 },
+  ];
+
+  const header =
+    `<div class="bt-trow bt-thead">
+       <div class="bt-tcell bt-tlabel"></div>
+       <div class="bt-tcell">Plain DCA</div>
+       <div class="bt-tcell bt-thi">Score-Weighted</div>
+       <div class="bt-tcell">Lump-Sum</div>
+     </div>`;
+
+  const body = rows.map(row => {
+    const vals = cols.map(row.get);
+    let bestIdx = -1, best = null;
+    if (row.dir !== 0) vals.forEach((v, i) => {
+      if (v != null && isFinite(v) && (best == null || (row.dir > 0 ? v > best : v < best))) { best = v; bestIdx = i; }
+    });
+    const cells = vals.map((v, i) =>
+      `<div class="bt-tcell ${i === bestIdx ? 'win' : ''}">${row.fmt(v)}</div>`).join('');
+    return `<div class="bt-trow"><div class="bt-tcell bt-tlabel">${row.label}</div>${cells}</div>`;
+  }).join('');
+
+  const a = smart.activity || { buys: 0, holds: 0, sells: 0 };
+  const note =
+    `<div class="bt-note">${result.periods.toLocaleString()} weekly periods (~${years.toFixed(1)} yrs). ` +
+    `Score-weighted activity: ${a.buys} buys · ${a.holds} holds · ${a.sells} sells · idle cash ${fmtUSD(smart.proceeds)}. ` +
+    `Returns, Sharpe and Sortino are contribution-adjusted (new cash isn't counted as gains); drawdown is on the growth index. ` +
+    `Lump-sum deploys the same total capital as Plain DCA, all at the start.</div>`;
+
+  el.innerHTML = `<div class="bt-table">${header}${body}</div>${note}`;
 }
 
 /* ════════════════════════════════════════════════════════════════════════ */
@@ -543,8 +577,14 @@ async function init() {
 function setupBacktestControls() {
   const run = $('bt-run');
   if (run) run.addEventListener('click', renderBacktest);
-  const amt = $('bt-amount');
-  if (amt) amt.addEventListener('change', renderBacktest);
+  ['bt-amount', 'bt-fee'].forEach(id => {
+    const el = $(id);
+    if (el) el.addEventListener('change', renderBacktest);
+  });
+  $$('.bt-sell-btn').forEach(btn => btn.addEventListener('click', () => {
+    $$('.bt-sell-btn').forEach(b => b.classList.toggle('active', b === btn));
+    renderBacktest();
+  }));
 }
 
 /* ════════════════════════════════════════════════════════════════════════ */
@@ -632,7 +672,7 @@ function syncTuningUI() {
   const yrs = CONFIG.PERCENTILE_WINDOW_DAYS / 365;
   const ws = $('tune-window');     if (ws) ws.value = Math.round(yrs);
   const wl = $('tune-window-val'); if (wl) wl.textContent = (Math.round(yrs * 10) / 10) + 'y';
-  $$('.tune-norm-btn').forEach(b => b.classList.toggle('active', b.dataset.norm === CONFIG.NORMALIZATION));
+  $$('.tune-norm-btn[data-norm]').forEach(b => b.classList.toggle('active', b.dataset.norm === CONFIG.NORMALIZATION));
 }
 
 function onWeightChange() {
@@ -667,7 +707,7 @@ function setupTuning() {
     if (sl) sl.addEventListener('input', onWeightChange);
   });
   const ws = $('tune-window'); if (ws) ws.addEventListener('input', onWindowChange);
-  $$('.tune-norm-btn').forEach(b => b.addEventListener('click', () => onNormChange(b.dataset.norm)));
+  $$('.tune-norm-btn[data-norm]').forEach(b => b.addEventListener('click', () => onNormChange(b.dataset.norm)));
   const rb = $('tune-reset'); if (rb) rb.addEventListener('click', resetTuning);
   const ob = $('opt-run');    if (ob) ob.addEventListener('click', runOptimizer);
   const ab = $('opt-apply');  if (ab) ab.addEventListener('click', applyOptimizerBest);
@@ -706,9 +746,12 @@ function weightCompositions(minTenths = 0) {
 function objectiveValue(summary, kind) {
   if (!summary) return null;
   const s = summary.smart;
-  if (kind === 'roi')   return s.roi;
-  if (kind === 'btc')   return s.btcPer1k;
-  if (kind === 'value') return s.value;
+  if (kind === 'roi')     return s.roi;
+  if (kind === 'btc')     return s.btcPer1k;
+  if (kind === 'value')   return s.value;
+  if (kind === 'sharpe')  return s.sharpe;
+  if (kind === 'sortino') return s.sortino;
+  if (kind === 'irr')     return s.irr;
   if (s.roi == null) return null;                       // risk-adjusted default
   return s.roi / Math.max(s.maxDrawdown, 0.01);
 }
@@ -720,6 +763,8 @@ async function runOptimizer() {
 
   const objective    = $('opt-objective')?.value || 'risk';
   const weeklyAmount = $('bt-amount')?.value || 100;
+  const optFee       = $('bt-fee')?.value || 0;
+  const optRotate    = document.querySelector('.bt-sell-btn.active')?.dataset.sell === 'rotate';
   const range        = State.dateRange;
   const windowsY     = [2, 3, 4, 5, 6];
   const minTenths    = Math.round((Number($('opt-minweight')?.value) || 0) / 10);
@@ -740,6 +785,7 @@ async function runOptimizer() {
       const cats = CAT_KEYS.map(k => ({ metrics: CONFIG.RISK_CATEGORIES[k].metrics, weight: w[k] }));
       const bt = Backtest.run(State.rows, {
         weeklyAmount, startDate: range.start, endDate: range.end,
+        rotate: optRotate, feePct: optFee,
         scoreOf: r => scoreWithCats(r.riskInputs, cats),
       });
       const val = objectiveValue(bt.summary, objective);
@@ -762,9 +808,11 @@ function renderOptimizerResult(best) {
   if (!best) { el.innerHTML = '<span class="bd-note">No result for this range.</span>'; return; }
   const wStr = CAT_KEYS.map(k => `${k} ${Math.round(best.weights[k] * 100)}%`).join(' · ');
   const s = best.summary.smart;
+  const irr = s.irr != null ? (s.irr * 100).toFixed(0) + '%' : '—';
+  const shp = s.sharpe != null ? s.sharpe.toFixed(2) : '—';
   el.innerHTML =
     `<div class="opt-best">Best: <strong>${best.windowY}y window</strong> · ${wStr}</div>` +
-    `<div class="bd-note">ROI ${(s.roi * 100).toFixed(0)}% · max drawdown ${(s.maxDrawdown * 100).toFixed(0)}% · ${s.btcPer1k.toFixed(4)} ₿ per $1k</div>`;
+    `<div class="bd-note">IRR ${irr} · Sharpe ${shp} · max drawdown ${(s.maxDrawdown * 100).toFixed(0)}% · ${s.btcPer1k.toFixed(4)} ₿ per $1k</div>`;
   $('opt-apply').style.display = '';
 }
 
