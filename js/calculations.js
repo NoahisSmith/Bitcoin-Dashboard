@@ -267,6 +267,62 @@ const Calc = {
     return totalW === 0 ? null : (totalS / totalW) * 10;
   },
 
+  // Display labels for each metric key (used by the breakdown panel)
+  METRIC_LABELS: {
+    ma200w: '200W MA', mayer: 'Mayer', logRegr: 'Log-Reg',
+    rsi: 'RSI', puell: 'Puell', fearGreed: 'Fear & Greed',
+  },
+
+  /* ── Explainable breakdown of the (category-mode) composite score ────── */
+  // Mirrors scoreFromInputs's 'percentile'/category path and returns, per
+  // category: its sub-score, nominal & effective (renormalized) weight, its
+  // points contribution to the 0–10 score, and each metric's input value with a
+  // present/missing flag. Lets the UI answer "why is the score X?".
+  scoreBreakdown(inp) {
+    if (!inp) return null;
+    const cats = [];
+    let totalW = 0, totalS = 0;
+
+    for (const [name, cat] of Object.entries(CONFIG.RISK_CATEGORIES)) {
+      const metrics = cat.metrics.map(m => ({
+        key: m,
+        label: this.METRIC_LABELS[m] || m,
+        value: inp[m],
+        present: inp[m] != null && !isNaN(inp[m]),
+      }));
+      const present = metrics.filter(m => m.present);
+      const sub = present.length
+        ? present.reduce((a, b) => a + b.value, 0) / present.length
+        : null;
+      if (sub != null) { totalS += sub * cat.weight; totalW += cat.weight; }
+      cats.push({ name, weight: cat.weight, sub, metrics });
+    }
+
+    const score = totalW === 0 ? null : (totalS / totalW) * 10;
+    cats.forEach(c => {
+      c.effectiveWeight = totalW ? c.weight / totalW : 0;
+      c.contribution = (c.sub != null && totalW) ? c.sub * c.effectiveWeight * 10 : 0;
+    });
+    return { score, cats, anyMissing: cats.some(c => c.metrics.some(m => !m.present)) };
+  },
+
+  /* ── (Re)compute the risk-score series from current CONFIG ───────────── */
+  // rebuildInputs=false reuses the cached row.riskInputs (use when only the
+  // category weights changed — no need to recompute the rolling percentiles).
+  applyScores(rows, rebuildInputs = true) {
+    if (rebuildInputs) {
+      const inputs = this.buildRiskInputs(rows);
+      rows.forEach((row, i) => { row.riskInputs = inputs[i]; });
+    }
+    const firstDate = rows.find(r => r.price)?.date.getTime();
+    rows.forEach(row => {
+      const ageDays = firstDate != null ? (row.date.getTime() - firstDate) / 86400000 : 0;
+      row.riskScore = (ageDays >= CONFIG.MIN_HISTORY_DAYS)
+        ? this.scoreFromInputs(row.riskInputs)
+        : null;
+    });
+  },
+
   /* ── Risk label lookup ──────────────────────────────────────────────── */
   riskLabel(score) {
     if (score == null) return { label: '—', color: '#94a3b8', action: '—' };
@@ -383,18 +439,8 @@ const Calc = {
       }
     });
 
-    // Risk score series (walk-forward, lookahead-free). Each row keeps its
-    // normalized inputs for transparency/debugging, and the score is gated
-    // until enough history exists for stable percentiles.
-    const inputs    = this.buildRiskInputs(rows);
-    const firstDate = rows.find(r => r.price)?.date.getTime();
-    rows.forEach((row, i) => {
-      row.riskInputs = inputs[i];
-      const ageDays  = firstDate != null ? (row.date.getTime() - firstDate) / 86400000 : 0;
-      row.riskScore  = (ageDays >= CONFIG.MIN_HISTORY_DAYS)
-        ? this.scoreFromInputs(inputs[i])
-        : null;
-    });
+    // Risk score series (walk-forward, lookahead-free).
+    this.applyScores(rows);
 
     return { rows, regression, residuals: sortedRes };
   },

@@ -207,6 +207,108 @@ function updateHalving(info) {
 }
 
 /* ════════════════════════════════════════════════════════════════════════ */
+/*  Current normalized inputs (most recent value per metric)                */
+/* ════════════════════════════════════════════════════════════════════════ */
+function buildCurrentInputs(rows) {
+  const keys = ['ma200w', 'mayer', 'logRegr', 'rsi', 'puell', 'fearGreed'];
+  const inp = {};
+  for (const k of keys) {
+    const r = [...rows].reverse().find(x =>
+      x.riskInputs && x.riskInputs[k] != null && !isNaN(x.riskInputs[k]));
+    inp[k] = r ? r.riskInputs[k] : null;
+  }
+  return inp;
+}
+
+/* ════════════════════════════════════════════════════════════════════════ */
+/*  Actionable "this week" recommendation                                   */
+/* ════════════════════════════════════════════════════════════════════════ */
+function renderAction() {
+  const out = $('action-output');
+  if (!out) return;
+
+  const score = State.currentRisk;
+  const price = State.currentPrice;
+  const info  = Calc.riskLabel(score);
+
+  const sigEl = $('action-signal');
+  if (sigEl) {
+    sigEl.textContent = score == null ? 'Signal: —' : `Signal: ${info.label} (${fmt(score, 1)}/10)`;
+    sigEl.style.color = info.color || 'var(--text-2)';
+  }
+
+  if (score == null) { out.innerHTML = '<span class="act-sub">Awaiting score…</span>'; return; }
+
+  const mult     = Backtest.allocFor(score);          // +2.0 … 0 … −0.20
+  const budget   = parseFloat($('act-budget')?.value)   || 0;
+  const holdings = parseFloat($('act-holdings')?.value) || 0;
+
+  if (mult > 0) {
+    const usd = budget * mult;
+    const btc = price ? usd / price : null;
+    out.innerHTML =
+      `<span class="act-verb buy">Buy ${fmtUSD(usd)}</span>` +
+      (btc != null ? ` <span class="act-sub">≈ ${btc.toFixed(5)} ₿ this week</span>` : '') +
+      ` <span class="act-mult">(${Math.round(mult * 100)}% of your $${fmt(budget, 0)} budget)</span>`;
+  } else if (mult === 0) {
+    out.innerHTML = `<span class="act-verb hold">Hold</span> <span class="act-sub">No buy this week — wait for a lower score.</span>`;
+  } else {
+    const pct = Math.round(-mult * 100);
+    let extra = '';
+    if (holdings > 0 && price) {
+      const sellBtc = holdings * (-mult);
+      extra = ` <span class="act-sub">≈ ${sellBtc.toFixed(5)} ₿ = ${fmtUSD(sellBtc * price)}</span>`;
+    } else {
+      extra = ` <span class="act-sub">enter holdings above for the ₿/$ amount</span>`;
+    }
+    out.innerHTML = `<span class="act-verb sell">Trim ${pct}%</span> <span class="act-sub">of your BTC holdings</span>${extra}`;
+  }
+}
+
+/* ════════════════════════════════════════════════════════════════════════ */
+/*  Score-contribution breakdown                                            */
+/* ════════════════════════════════════════════════════════════════════════ */
+function renderScoreBreakdown() {
+  const el = $('risk-breakdown');
+  if (!el) return;
+
+  const bd = Calc.scoreBreakdown(State.currentInputs);
+  if (!bd || bd.score == null) { el.innerHTML = '<div class="bd-note">Awaiting score…</div>'; return; }
+
+  const pct = v => v == null ? '—' : Math.round(v * 100) + '%';
+
+  const cats = bd.cats.map(c => {
+    const metricStr = c.metrics
+      .map(m => m.present
+        ? `${m.label} ${pct(m.value)}`
+        : `<span class="bd-missing">${m.label} —</span>`)
+      .join(' · ');
+    const subPct = c.sub != null ? Math.round(c.sub * 100) : 0;
+    const wLabel = Math.abs(c.effectiveWeight - c.weight) > 0.001
+      ? `${Math.round(c.weight * 100)}% → ${Math.round(c.effectiveWeight * 100)}%`   // renormalized
+      : `${Math.round(c.weight * 100)}%`;
+    const name = c.name.charAt(0).toUpperCase() + c.name.slice(1);
+    return `
+      <div class="bd-cat">
+        <div class="bd-cat-head">
+          <span class="bd-cat-name">${name}</span>
+          <span class="bd-cat-weight">weight ${wLabel}</span>
+          <span class="bd-cat-contrib">+${fmt(c.contribution, 2)} pts</span>
+        </div>
+        <div class="bd-bar"><div class="bd-bar-fill" style="width:${subPct}%"></div></div>
+        <div class="bd-metrics">${metricStr}</div>
+      </div>`;
+  }).join('');
+
+  el.innerHTML =
+    `<div class="bd-head">Why ${fmt(bd.score, 1)}/10? — category contributions (sum to the score)</div>` +
+    cats +
+    (bd.anyMissing
+      ? `<div class="bd-note">Greyed metrics have no current reading (weekly RSI / Puell can lag); remaining weights are renormalized so the score still sums to 100%.</div>`
+      : '');
+}
+
+/* ════════════════════════════════════════════════════════════════════════ */
 /*  Navigation                                                              */
 /* ════════════════════════════════════════════════════════════════════════ */
 function navigate(section) {
@@ -404,13 +506,15 @@ async function init() {
     State.regression = regression;
     State.residuals  = residuals;
 
-    // Current risk = the latest row that carries a (walk-forward) score.
-    // computeAll already builds the score series with per-field staleness and
-    // history gating baked in, so the live read is just the most recent value
-    // rather than a separately re-derived calculation.
+    // Live risk: take the most recent available normalized input for EACH
+    // metric (weekly RSI and Puell don't update every day) and score that, so
+    // the current reading reflects all categories rather than only whatever the
+    // last daily row happened to carry.
     const findLatest = field => [...rows].reverse().find(r => r[field] != null);
     const last = findLatest('price');
-    State.currentRisk = findLatest('riskScore')?.riskScore ?? null;
+    State.currentInputs = buildCurrentInputs(rows);
+    State.currentRisk   = Calc.scoreFromInputs(State.currentInputs);
+    State.currentPrice  = priceSnap?.bitcoin?.usd ?? last?.price ?? null;
 
     // Halving
     State.halvingInfo = Calc.halvingCountdown(height);
@@ -421,6 +525,8 @@ async function init() {
     updateMetricCards(rows);
     updateHalving(State.halvingInfo);
     applyRiskColor(State.currentRisk ?? 5);
+    renderAction();
+    renderScoreBreakdown();
     navigate('dashboard');
 
     const ts = new Date().toLocaleTimeString();
@@ -490,6 +596,186 @@ function setupDateRange() {
   });
 }
 
+/* ════════════════════════════════════════════════════════════════════════ */
+/*  Risk-score tuning + optimizer                                           */
+/* ════════════════════════════════════════════════════════════════════════ */
+// Snapshot the shipped defaults so "Reset" can restore them.
+const TUNING_DEFAULTS = {
+  window: CONFIG.PERCENTILE_WINDOW_DAYS,
+  normalization: CONFIG.NORMALIZATION,
+  weights: Object.fromEntries(
+    Object.entries(CONFIG.RISK_CATEGORIES).map(([k, v]) => [k, v.weight])),
+};
+const CAT_KEYS = Object.keys(CONFIG.RISK_CATEGORIES);
+
+// Re-score every row from current CONFIG and refresh the whole app. Pass
+// rebuildInputs=false when only category weights changed (skips the heavier
+// rolling-percentile recompute).
+function recomputeScores(rebuildInputs = true) {
+  if (!State.rows.length) return;
+  Calc.applyScores(State.rows, rebuildInputs);
+  State.currentInputs = buildCurrentInputs(State.rows);
+  State.currentRisk   = Calc.scoreFromInputs(State.currentInputs);
+  applyRiskColor(State.currentRisk ?? 5);
+  renderAction();
+  renderScoreBreakdown();
+  refreshCharts();
+}
+
+/* ── Tuning controls ──────────────────────────────────────────────────── */
+function syncTuningUI() {
+  CAT_KEYS.forEach(k => {
+    const pct = Math.round(CONFIG.RISK_CATEGORIES[k].weight * 100);
+    const sl = $(`tune-w-${k}`);    if (sl)  sl.value = pct;
+    const lb = $(`tune-wval-${k}`); if (lb)  lb.textContent = pct + '%';
+  });
+  const yrs = CONFIG.PERCENTILE_WINDOW_DAYS / 365;
+  const ws = $('tune-window');     if (ws) ws.value = Math.round(yrs);
+  const wl = $('tune-window-val'); if (wl) wl.textContent = (Math.round(yrs * 10) / 10) + 'y';
+  $$('.tune-norm-btn').forEach(b => b.classList.toggle('active', b.dataset.norm === CONFIG.NORMALIZATION));
+}
+
+function onWeightChange() {
+  CAT_KEYS.forEach(k => {
+    const el = $(`tune-w-${k}`);
+    if (el) CONFIG.RISK_CATEGORIES[k].weight = Number(el.value) / 100;
+  });
+  syncTuningUI();
+  recomputeScores(false);      // weights only → reuse cached inputs
+}
+function onWindowChange() {
+  CONFIG.PERCENTILE_WINDOW_DAYS = Math.round(Number($('tune-window').value) * 365);
+  syncTuningUI();
+  recomputeScores(true);
+}
+function onNormChange(mode) {
+  CONFIG.NORMALIZATION = mode;
+  syncTuningUI();
+  recomputeScores(true);
+}
+function resetTuning() {
+  CONFIG.PERCENTILE_WINDOW_DAYS = TUNING_DEFAULTS.window;
+  CONFIG.NORMALIZATION = TUNING_DEFAULTS.normalization;
+  CAT_KEYS.forEach(k => { CONFIG.RISK_CATEGORIES[k].weight = TUNING_DEFAULTS.weights[k]; });
+  syncTuningUI();
+  recomputeScores(true);
+}
+
+function setupTuning() {
+  CAT_KEYS.forEach(k => {
+    const sl = $(`tune-w-${k}`);
+    if (sl) sl.addEventListener('input', onWeightChange);
+  });
+  const ws = $('tune-window'); if (ws) ws.addEventListener('input', onWindowChange);
+  $$('.tune-norm-btn').forEach(b => b.addEventListener('click', () => onNormChange(b.dataset.norm)));
+  const rb = $('tune-reset'); if (rb) rb.addEventListener('click', resetTuning);
+  const ob = $('opt-run');    if (ob) ob.addEventListener('click', runOptimizer);
+  const ab = $('opt-apply');  if (ab) ab.addEventListener('click', applyOptimizerBest);
+  syncTuningUI();
+}
+
+/* ── Optimizer (grid search) ──────────────────────────────────────────── */
+// Score from candidate category weights (membership fixed by CONFIG, weights
+// supplied) without touching global CONFIG.
+function scoreWithCats(inp, cats) {
+  let tW = 0, tS = 0;
+  for (const c of cats) {
+    let sum = 0, n = 0;
+    for (const m of c.metrics) { const v = inp[m]; if (v != null && !isNaN(v)) { sum += v; n++; } }
+    if (!n) continue;
+    tS += (sum / n) * c.weight; tW += c.weight;
+  }
+  return tW === 0 ? null : (tS / tW) * 10;
+}
+
+// All 4-category weight vectors summing to 1.0 in 0.1 steps, with every
+// category ≥ `minTenths`/10. The floor (default 0.1) keeps the search away from
+// degenerate corner solutions where the score collapses onto a single signal.
+function weightCompositions(minTenths = 0) {
+  const out = [];
+  const m = minTenths;
+  for (let a = m; a <= 10 - 3 * m; a++)
+    for (let b = m; b <= 10 - a - 2 * m; b++)
+      for (let c = m; c <= 10 - a - b - m; c++) {
+        const d = 10 - a - b - c;
+        out.push({ [CAT_KEYS[0]]: a / 10, [CAT_KEYS[1]]: b / 10, [CAT_KEYS[2]]: c / 10, [CAT_KEYS[3]]: d / 10 });
+      }
+  return out;
+}
+
+function objectiveValue(summary, kind) {
+  if (!summary) return null;
+  const s = summary.smart;
+  if (kind === 'roi')   return s.roi;
+  if (kind === 'btc')   return s.btcPer1k;
+  if (kind === 'value') return s.value;
+  if (s.roi == null) return null;                       // risk-adjusted default
+  return s.roi / Math.max(s.maxDrawdown, 0.01);
+}
+
+async function runOptimizer() {
+  if (!State.rows.length) return;
+  const runBtn = $('opt-run'), applyBtn = $('opt-apply'), status = $('opt-status');
+  runBtn.disabled = true; applyBtn.style.display = 'none';
+
+  const objective    = $('opt-objective')?.value || 'risk';
+  const weeklyAmount = $('bt-amount')?.value || 100;
+  const range        = State.dateRange;
+  const windowsY     = [2, 3, 4, 5, 6];
+  const minTenths    = Math.round((Number($('opt-minweight')?.value) || 0) / 10);
+  const grid         = weightCompositions(minTenths);
+  const savedWindow  = CONFIG.PERCENTILE_WINDOW_DAYS;
+  let best = null;
+
+  for (let wi = 0; wi < windowsY.length; wi++) {
+    const yrs = windowsY[wi];
+    if (status) status.textContent = `Testing ${yrs}-year window… (${wi + 1}/${windowsY.length})`;
+    await new Promise(r => setTimeout(r, 16));          // let the UI paint
+
+    CONFIG.PERCENTILE_WINDOW_DAYS = yrs * 365;
+    const inputs = Calc.buildRiskInputs(State.rows);
+    State.rows.forEach((r, i) => { r.riskInputs = inputs[i]; });
+
+    for (const w of grid) {
+      const cats = CAT_KEYS.map(k => ({ metrics: CONFIG.RISK_CATEGORIES[k].metrics, weight: w[k] }));
+      const bt = Backtest.run(State.rows, {
+        weeklyAmount, startDate: range.start, endDate: range.end,
+        scoreOf: r => scoreWithCats(r.riskInputs, cats),
+      });
+      const val = objectiveValue(bt.summary, objective);
+      if (val != null && isFinite(val) && (!best || val > best.val)) {
+        best = { val, windowY: yrs, weights: w, summary: bt.summary };
+      }
+    }
+  }
+
+  CONFIG.PERCENTILE_WINDOW_DAYS = savedWindow;
+  recomputeScores(true);                                // restore user's settings
+  State.optimizerBest = best;
+  if (status) status.textContent = '';
+  runBtn.disabled = false;
+  renderOptimizerResult(best);
+}
+
+function renderOptimizerResult(best) {
+  const el = $('opt-result'); if (!el) return;
+  if (!best) { el.innerHTML = '<span class="bd-note">No result for this range.</span>'; return; }
+  const wStr = CAT_KEYS.map(k => `${k} ${Math.round(best.weights[k] * 100)}%`).join(' · ');
+  const s = best.summary.smart;
+  el.innerHTML =
+    `<div class="opt-best">Best: <strong>${best.windowY}y window</strong> · ${wStr}</div>` +
+    `<div class="bd-note">ROI ${(s.roi * 100).toFixed(0)}% · max drawdown ${(s.maxDrawdown * 100).toFixed(0)}% · ${s.btcPer1k.toFixed(4)} ₿ per $1k</div>`;
+  $('opt-apply').style.display = '';
+}
+
+function applyOptimizerBest() {
+  const b = State.optimizerBest; if (!b) return;
+  CONFIG.PERCENTILE_WINDOW_DAYS = b.windowY * 365;
+  CAT_KEYS.forEach(k => { CONFIG.RISK_CATEGORIES[k].weight = b.weights[k]; });
+  syncTuningUI();
+  recomputeScores(true);
+}
+
 /* ── Wire up nav buttons ────────────────────────────────────────────────── */
 document.addEventListener('DOMContentLoaded', () => {
   $$('.nav-btn').forEach(btn =>
@@ -498,5 +784,10 @@ document.addEventListener('DOMContentLoaded', () => {
   setupScaleToggles();
   setupBacktestControls();
   setupDateRange();
+  setupTuning();
+  ['act-budget', 'act-holdings'].forEach(id => {
+    const el = $(id);
+    if (el) el.addEventListener('input', renderAction);
+  });
   init();
 });

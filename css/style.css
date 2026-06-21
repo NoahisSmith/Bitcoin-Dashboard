@@ -281,6 +281,93 @@ main { padding: 24px; max-width: 1400px; margin: 0 auto; }
 .section { display: none; }
 .section.active { display: block; }
 
+/* ── Action this week ────────────────────────────────────────────────────── */
+.action-panel {
+  background: var(--surface);
+  border: 1px solid var(--border-hi);
+  border-radius: var(--radius);
+  padding: 18px 20px;
+  margin-bottom: 20px;
+  display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between;
+  gap: 18px;
+}
+.action-title {
+  font-size: 0.62rem; letter-spacing: 0.12em;
+  text-transform: uppercase; color: var(--text-3);
+  font-family: var(--mono); margin-bottom: 6px;
+}
+.action-signal {
+  font-family: var(--mono); font-size: 0.78rem; font-weight: 500;
+  margin-bottom: 6px;
+}
+.action-output {
+  font-family: var(--sans); font-size: 1.25rem; color: var(--text);
+  line-height: 1.4;
+}
+.act-verb { font-family: var(--mono); font-weight: 600; }
+.act-verb.buy  { color: var(--green); }
+.act-verb.sell { color: var(--red); }
+.act-verb.hold { color: var(--text-2); }
+.act-sub  { font-size: 0.82rem; color: var(--text-2); }
+.act-mult { font-size: 0.75rem; color: var(--text-3); font-family: var(--mono); }
+.action-inputs { display: flex; flex-wrap: wrap; gap: 14px; }
+.action-field {
+  display: flex; flex-direction: column; gap: 5px;
+  font-size: 0.6rem; letter-spacing: 0.1em;
+  text-transform: uppercase; color: var(--text-3);
+  font-family: var(--mono);
+}
+.action-field input {
+  background: var(--surface-alt);
+  border: 1px solid var(--border-hi);
+  border-radius: 6px;
+  color: var(--text);
+  font-family: var(--mono);
+  font-size: 0.9rem;
+  padding: 8px 10px;
+  width: 150px;
+}
+.action-field input:focus { outline: none; border-color: var(--btc); }
+
+/* ── Score breakdown ─────────────────────────────────────────────────────── */
+.breakdown { margin-top: 20px; }
+.bd-head {
+  font-size: 0.78rem; color: var(--text-2);
+  font-family: var(--mono); margin-bottom: 14px;
+}
+.bd-cat { margin-bottom: 14px; }
+.bd-cat-head {
+  display: flex; align-items: baseline; gap: 10px;
+  margin-bottom: 5px;
+}
+.bd-cat-name {
+  font-size: 0.8rem; font-weight: 600; color: var(--text);
+}
+.bd-cat-weight {
+  font-size: 0.65rem; color: var(--text-3); font-family: var(--mono);
+}
+.bd-cat-contrib {
+  margin-left: auto;
+  font-family: var(--mono); font-size: 0.78rem; font-weight: 600; color: var(--btc);
+}
+.bd-bar {
+  height: 6px; background: var(--border);
+  border-radius: 3px; overflow: hidden; margin-bottom: 5px;
+}
+.bd-bar-fill {
+  height: 100%;
+  background: linear-gradient(90deg, var(--green), var(--yellow), var(--red));
+  border-radius: 3px;
+}
+.bd-metrics {
+  font-size: 0.72rem; color: var(--text-2); font-family: var(--mono);
+}
+.bd-missing { color: var(--text-3); opacity: 0.6; }
+.bd-note {
+  font-size: 0.7rem; color: var(--text-3); font-family: var(--mono);
+  margin-top: 12px; line-height: 1.5;
+}
+
 /* ── Dashboard metric cards ──────────────────────────────────────────────── */
 .cards-grid {
   display: grid;
@@ -508,6 +595,77 @@ main { padding: 24px; max-width: 1400px; margin: 0 auto; }
   font-size: 0.7rem; color: var(--text-3);
   font-family: var(--mono);
 }
+
+/* ── Tuning & optimizer panels ───────────────────────────────────────────── */
+.tune-panel, .opt-panel {
+  background: var(--surface-alt);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 16px 18px;
+  margin-bottom: 16px;
+}
+.tune-title {
+  display: flex; align-items: center; justify-content: space-between;
+  font-size: 0.7rem; letter-spacing: 0.1em;
+  text-transform: uppercase; color: var(--text-2);
+  font-family: var(--mono); margin-bottom: 14px;
+}
+.tune-reset {
+  background: none; border: 1px solid var(--border-hi);
+  border-radius: 6px; cursor: pointer;
+  color: var(--text-3); font-family: var(--mono);
+  font-size: 0.62rem; letter-spacing: 0.04em;
+  text-transform: none; padding: 4px 10px;
+}
+.tune-reset:hover { color: var(--btc); border-color: var(--btc); }
+.tune-row, .tune-wrow {
+  display: flex; align-items: center; gap: 12px;
+  margin-bottom: 10px;
+}
+.tune-label {
+  width: 130px; flex-shrink: 0;
+  font-size: 0.72rem; color: var(--text-2); font-family: var(--mono);
+}
+.tune-row input[type=range], .tune-wrow input[type=range] {
+  flex: 1; min-width: 120px; accent-color: var(--btc); cursor: pointer;
+}
+.tune-val {
+  width: 44px; text-align: right; flex-shrink: 0;
+  font-family: var(--mono); font-size: 0.75rem; color: var(--text);
+}
+.tune-norm {
+  display: inline-flex; border: 1px solid var(--border-hi);
+  border-radius: 6px; overflow: hidden;
+}
+.tune-norm-btn {
+  background: none; border: none; cursor: pointer;
+  font-family: var(--mono); font-size: 0.65rem; font-weight: 600;
+  color: var(--text-3); padding: 5px 12px;
+}
+.tune-norm-btn + .tune-norm-btn { border-left: 1px solid var(--border-hi); }
+.tune-norm-btn.active { background: var(--btc-dim); color: var(--btc); }
+
+.opt-controls {
+  display: flex; flex-wrap: wrap; align-items: flex-end; gap: 12px;
+  margin-bottom: 12px;
+}
+.opt-controls select {
+  background: var(--surface);
+  border: 1px solid var(--border-hi);
+  border-radius: 6px;
+  color: var(--text);
+  font-family: var(--mono);
+  font-size: 0.8rem;
+  padding: 8px 10px;
+}
+.opt-controls select:focus { outline: none; border-color: var(--btc); }
+.opt-status { font-family: var(--mono); font-size: 0.72rem; color: var(--btc); align-self: center; }
+.opt-result { margin-bottom: 10px; }
+.opt-best {
+  font-family: var(--mono); font-size: 0.82rem; color: var(--text);
+  margin-bottom: 4px;
+}
+.opt-best strong { color: var(--btc); }
 
 /* ── Status bar ──────────────────────────────────────────────────────────── */
 .status-bar {

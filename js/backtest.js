@@ -58,11 +58,14 @@ const Backtest = {
   },
 
   /* ── Run the simulation ──────────────────────────────────────────────── */
-  // opts: { weeklyAmount, startDate, endDate }
+  // opts: { weeklyAmount, startDate, endDate, scoreOf }
+  // scoreOf(row) lets callers (e.g. the optimizer) supply candidate scores
+  // without mutating the rows; defaults to each row's stored riskScore.
   run(rows, opts = {}) {
     const weeklyAmount = Number(opts.weeklyAmount) > 0 ? Number(opts.weeklyAmount) : 100;
     const startMs = opts.startDate ? new Date(opts.startDate).getTime() : -Infinity;
     const endMs   = opts.endDate   ? new Date(opts.endDate).getTime()   :  Infinity;
+    const scoreOf = typeof opts.scoreOf === 'function' ? opts.scoreOf : (r => r.riskScore);
 
     const periods = this.weeklyPeriods(rows, startMs, endMs);
     if (!periods.length) return { series: [], summary: null, periods: 0 };
@@ -73,13 +76,14 @@ const Backtest = {
 
     for (const r of periods) {
       const price = r.price;
+      const score = scoreOf(r);
 
       // Plain DCA — fixed buy every week
       plain.btc += weeklyAmount / price;
       plain.deployed += weeklyAmount;
 
       // Score-weighted DCA
-      const mult = this.allocFor(r.riskScore);
+      const mult = this.allocFor(score);
       if (mult > 0) {
         const spend = weeklyAmount * mult;
         smart.btc += spend / price;
@@ -94,7 +98,7 @@ const Backtest = {
       series.push({
         date:          r.date,
         price,
-        score:         r.riskScore,
+        score,
         plainValue:    plain.btc * price,
         plainBtc:      plain.btc,
         plainDeployed: plain.deployed,

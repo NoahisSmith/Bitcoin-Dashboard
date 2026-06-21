@@ -166,16 +166,19 @@ const ChartRenderers = {
     const pts = thin(rows.filter(r => r.price));
     const opts = baseOptions(scaleType === 'log', 'USD');
 
-    // Colour‐coded price dataset (green below MA, orange above)
-    const colorData = pts.map(r => {
-      if (!r.ma200w || !r.price) return '#f7931a44';
-      const mult = r.price / r.ma200w;
-      if (mult < 1)   return '#10b981';
-      if (mult < 1.5) return '#34d399';
-      if (mult < 2.5) return '#f59e0b';
-      if (mult < 4)   return '#f97316';
+    // Single colour scale, matching the legend exactly: green below the MA,
+    // orange 1–2×, dark-orange 2–3.5×, red above 3.5×. (Previously the line
+    // segments used a different 5-bucket scale whose light-green 1–1.5× band
+    // wasn't in the legend and made price near the MA look like it was below it.)
+    const maColor = r => {
+      if (!r.ma200w || !r.price) return CONFIG.C.btc;
+      const m = r.price / r.ma200w;
+      if (m < 1)   return '#10b981';
+      if (m < 2)   return '#f59e0b';
+      if (m < 3.5) return '#f97316';
       return '#ef4444';
-    });
+    };
+    const colorData = pts.map(maColor);
 
     CHARTS[canvasId] = new Chart(document.getElementById(canvasId), {
       type: 'line',
@@ -185,12 +188,7 @@ const ChartRenderers = {
           {
             label: 'BTC Price', _fmt: 'USD',
             data: pts.map(r => r.price),
-            borderColor: pts.map(r => {
-              if (!r.ma200w) return CONFIG.C.btc;
-              const m = r.price / r.ma200w;
-              if (m < 1) return '#10b981'; if (m < 2) return '#f59e0b';
-              if (m < 3.5) return '#f97316'; return '#ef4444';
-            }),
+            borderColor: colorData,
             borderWidth: 1.5, fill: false, tension: 0,
             segment: { borderColor: ctx => colorData[ctx.p0DataIndex] || CONFIG.C.btc },
           },

@@ -105,6 +105,25 @@
       <!-- Halving countdown -->
       <div class="halving-strip" id="halving-info">Loading halving countdown…</div>
 
+      <!-- Action this week -->
+      <div class="action-panel">
+        <div class="action-left">
+          <div class="action-title">Action This Week</div>
+          <div class="action-signal" id="action-signal">Signal: —</div>
+          <div class="action-output" id="action-output">—</div>
+        </div>
+        <div class="action-inputs">
+          <label class="action-field">
+            <span>Weekly budget ($)</span>
+            <input type="number" id="act-budget" value="100" min="0" step="10">
+          </label>
+          <label class="action-field">
+            <span>Holdings (₿, optional)</span>
+            <input type="number" id="act-holdings" min="0" step="0.001" placeholder="0">
+          </label>
+        </div>
+      </div>
+
       <!-- Metric cards -->
       <div class="cards-grid">
         <div class="metric-card">
@@ -292,6 +311,9 @@
           <div class="legend-item"><div class="legend-swatch" style="background:#ef4444;height:10px;width:20px"></div>Sell Zone 6–10</div>
           <div class="legend-item"><div class="legend-swatch" style="background:#f7931a44"></div>BTC Price (log, left axis)</div>
         </div>
+
+        <!-- Current score breakdown -->
+        <div class="breakdown" id="risk-breakdown"></div>
       </div>
 
       <!-- DCA allocation table -->
@@ -382,6 +404,57 @@
           <span class="bt-hint">Simulation window follows the global date range above.</span>
         </div>
 
+        <!-- Risk-score tuning -->
+        <div class="tune-panel">
+          <div class="tune-title">Risk-Score Tuning <button class="tune-reset" id="tune-reset">Reset to defaults</button></div>
+          <div class="tune-row">
+            <span class="tune-label">Normalization</span>
+            <div class="tune-norm">
+              <button class="tune-norm-btn" data-norm="percentile">Percentile</button>
+              <button class="tune-norm-btn" data-norm="fixed">Fixed</button>
+            </div>
+          </div>
+          <div class="tune-row">
+            <span class="tune-label">Percentile window</span>
+            <input type="range" id="tune-window" min="1" max="8" step="1">
+            <span class="tune-val" id="tune-window-val">4y</span>
+          </div>
+          <div class="tune-wrow"><span class="tune-label">Valuation</span><input type="range" id="tune-w-valuation" min="0" max="100" step="5"><span class="tune-val" id="tune-wval-valuation">45%</span></div>
+          <div class="tune-wrow"><span class="tune-label">Momentum</span><input type="range" id="tune-w-momentum" min="0" max="100" step="5"><span class="tune-val" id="tune-wval-momentum">20%</span></div>
+          <div class="tune-wrow"><span class="tune-label">Miner</span><input type="range" id="tune-w-miner" min="0" max="100" step="5"><span class="tune-val" id="tune-wval-miner">20%</span></div>
+          <div class="tune-wrow"><span class="tune-label">Sentiment</span><input type="range" id="tune-w-sentiment" min="0" max="100" step="5"><span class="tune-val" id="tune-wval-sentiment">15%</span></div>
+          <div class="bd-note">Weights are relative (the score renormalizes them). Changes apply live to every chart, the score and the backtest below.</div>
+        </div>
+
+        <!-- Optimizer -->
+        <div class="opt-panel">
+          <div class="tune-title">Optimizer</div>
+          <div class="opt-controls">
+            <label class="bt-field">
+              <span>Maximize</span>
+              <select id="opt-objective">
+                <option value="risk">Risk-adjusted (ROI ÷ drawdown)</option>
+                <option value="roi">Return on capital</option>
+                <option value="btc">BTC per $1k</option>
+                <option value="value">Final value</option>
+              </select>
+            </label>
+            <label class="bt-field">
+              <span>Min weight / category</span>
+              <select id="opt-minweight">
+                <option value="0">0% (allow corners)</option>
+                <option value="10" selected>10%</option>
+                <option value="20">20%</option>
+              </select>
+            </label>
+            <button class="bt-run" id="opt-run">Optimize on current range</button>
+            <button class="bt-run" id="opt-apply" style="display:none">Apply best</button>
+            <span class="opt-status" id="opt-status"></span>
+          </div>
+          <div class="opt-result" id="opt-result"></div>
+          <div class="bd-note">Grid-searches the percentile window and category weights to maximize your objective over the selected date range. The min-weight floor keeps every signal in play so the result stays balanced rather than collapsing onto one metric. Tip: pick a modern range (e.g. 8Y) so the early hyper-volatile era doesn't skew the result.</div>
+        </div>
+
         <div class="chart-area"><canvas id="chart-backtest"></canvas></div>
         <div class="chart-legend">
           <div class="legend-item"><div class="legend-swatch" style="background:#10b981"></div>Score-Weighted DCA</div>
@@ -397,7 +470,7 @@
   <div class="status-bar" id="status-msg-bottom">Loading…</div>
 
   <footer>
-    <p>Data: <a href="https://blockchain.com" target="_blank">Blockchain.info</a> · <a href="https://coingecko.com" target="_blank">CoinGecko</a> · <a href="https://alternative.me/crypto/fear-and-greed-index/" target="_blank">Alternative.me</a> &nbsp;|&nbsp; Not financial advice &nbsp;|&nbsp; <a href="https://github.com/YOUR_USERNAME/bitcoin-metrics" target="_blank">GitHub</a> &nbsp;|&nbsp; Updates every 15 min (cached)</p>
+    <p>Data: <a href="https://blockchain.com" target="_blank">Blockchain.info</a> · <a href="https://coingecko.com" target="_blank">CoinGecko</a> · <a href="https://alternative.me/crypto/fear-and-greed-index/" target="_blank">Alternative.me</a> &nbsp;|&nbsp; Not financial advice &nbsp;|&nbsp; <a href="https://github.com/noahissmith/bitcoin-metrics" target="_blank">GitHub</a> &nbsp;|&nbsp; Updates every 15 min (cached)</p>
   </footer>
 
 </div><!-- /#app -->
