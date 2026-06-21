@@ -213,8 +213,9 @@ const Calc = {
     const rsi   = rows.map(r => r.weeklyRsi);
     const puell = rows.map(r => r.puell);
     const fg    = rows.map(r => r.fearGreed);
+    const mvrv  = rows.map(r => r.mvrvZ);
 
-    let nMa, nMy, nRs, nPu, nFg, nLog;
+    let nMa, nMy, nRs, nPu, nFg, nLog, nMv;
     if (mode === 'fixed') {
       const R = CONFIG.RISK_RANGES;
       nMa  = ratio.map(v => this.norm(v, R.ma200w.min, R.ma200w.max));
@@ -222,6 +223,7 @@ const Calc = {
       nRs  = rsi.map(v   => this.norm(v, R.rsi.min,    R.rsi.max));
       nPu  = puell.map(v => this.norm(v, R.puell.min,  R.puell.max));
       nFg  = fg.map(v    => this.norm(v, R.fearGreed.min, R.fearGreed.max));
+      nMv  = mvrv.map(v  => this.norm(v, R.mvrvZ.min,  R.mvrvZ.max));
       nLog = rows.map(r  => r.logRegrPct ?? null);          // legacy full-history pct
     } else {
       const dates    = rows.map(r => r.date.getTime());
@@ -231,12 +233,13 @@ const Calc = {
       nRs  = this.rollingPercentile(rsi,   dates, windowMs);
       nPu  = this.rollingPercentile(puell, dates, windowMs);
       nFg  = this.rollingPercentile(fg,    dates, windowMs);
+      nMv  = this.rollingPercentile(mvrv,  dates, windowMs);
       nLog = this.walkForwardLogPct(rows, windowMs);        // trailing-window pct
     }
 
     return rows.map((r, i) => ({
       ma200w: nMa[i], mayer: nMy[i], logRegr: nLog[i],
-      rsi: nRs[i], puell: nPu[i], fearGreed: nFg[i],
+      rsi: nRs[i], puell: nPu[i], fearGreed: nFg[i], mvrvZ: nMv[i],
     }));
   },
 
@@ -269,7 +272,7 @@ const Calc = {
 
   // Display labels for each metric key (used by the breakdown panel)
   METRIC_LABELS: {
-    ma200w: '200W MA', mayer: 'Mayer', logRegr: 'Log-Reg',
+    ma200w: '200W MA', mayer: 'Mayer', logRegr: 'Log-Reg', mvrvZ: 'MVRV-Z',
     rsi: 'RSI', puell: 'Puell', fearGreed: 'Fear & Greed',
   },
 
@@ -345,7 +348,7 @@ const Calc = {
   // Price is the backbone series (most complete); market cap and miner
   // revenue are merged onto it by day. Timestamps occasionally drift by a
   // few hours between charts, so we bucket everything to a UTC date string.
-  alignData(priceData, mcapData, revenueData, fgData) {
+  alignData(priceData, mcapData, revenueData, fgData, mvrvData) {
     const map = new Map();
 
     const toDateStr = unixSeconds => new Date(unixSeconds * 1000).toISOString().slice(0, 10);
@@ -360,6 +363,7 @@ const Calc = {
         marketCap:    null,
         minerRevenue: null,
         fearGreed:    null,
+        mvrvZ:        null,
         // calculated later:
         ma200w:    null,
         weeklyRsi: null,
@@ -386,6 +390,12 @@ const Calc = {
         if (entry) entry.fearGreed = parseInt(row.value);
       });
     }
+
+    // Merge MVRV Z-Score (bitcoin-data.com rows: { d: 'YYYY-MM-DD', mvrvZscore })
+    (mvrvData || []).forEach(row => {
+      const entry = map.get(row.d);
+      if (entry && row.mvrvZscore != null) entry.mvrvZ = Number(row.mvrvZscore);
+    });
 
     return Array.from(map.values()).sort((a, b) => a.date - b.date);
   },

@@ -95,6 +95,30 @@ const API = {
     }
   },
 
+  /* ── bitcoin-data.com (BGeometrics): MVRV Z-Score ─────────────────────
+     Realized-cap data needed for MVRV is no longer available from a free,
+     keyless, full-history source (CoinMetrics' Community tier now gates
+     CapRealUSD). bitcoin-data.com serves the Z-Score precomputed, keyless and
+     CORS-enabled, but the free window only reaches back ~4 years — so this is a
+     recent-history signal, merged where available and otherwise treated as
+     missing (the risk score renormalizes around it). ───────────────────── */
+  async fetchMvrvZ() {
+    const key = 'btcdata_mvrvz';
+    const cached = this._getCache(key);
+    if (cached) return cached;
+
+    const today = new Date().toISOString().slice(0, 10);
+    const url = `https://bitcoin-data.com/v1/mvrv-zscore?startday=2010-07-18&endday=${today}`;
+    try {
+      const data = await this._fetch(url);
+      this._setCache(key, data);
+      return data;
+    } catch (e) {
+      console.warn('MVRV Z-Score unavailable:', e.message);
+      return null;
+    }
+  },
+
   /* ── Blockchain.info: halving block estimation ────────────────────────── */
   async fetchBlockHeight() {
     const key = 'bc_height';

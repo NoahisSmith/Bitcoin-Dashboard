@@ -296,6 +296,34 @@ const ChartRenderers = {
     });
   },
 
+  /* ── MVRV Z-Score ────────────────────────────────────────────────────── */
+  mvrvz(canvasId, rows) {
+    destroyChart(canvasId);
+    const pts = thin(rows.filter(r => r.mvrvZ != null));
+    if (pts.length === 0) { showNoData(canvasId, 'MVRV Z-Score data unavailable'); return; }
+    const opts = baseOptions(false, 'NUM');
+
+    opts.plugins.annotation.annotations = {
+      ...hZone('sell', 7, 12, '#ef4444', 'Overbought >7'),
+      ...hZone('buy', -1, 0.1, '#10b981', 'Oversold <0.1'),
+      ...hLine('zero', 0, '#4a5568'),
+    };
+
+    CHARTS[canvasId] = new Chart(document.getElementById(canvasId), {
+      type: 'line',
+      data: {
+        labels: pts.map(r => r.date),
+        datasets: [{
+          label: 'MVRV Z-Score', _fmt: 'NUM',
+          data: pts.map(r => r.mvrvZ),
+          borderColor: CONFIG.C.purple,
+          borderWidth: 1.5, fill: false, tension: 0.1,
+        }],
+      },
+      options: opts,
+    });
+  },
+
   /* ── Logarithmic Regression + Quantile Fan ───────────────────────────── */
   logRegression(canvasId, rows, regression, residuals, scaleType = 'log') {
     destroyChart(canvasId);

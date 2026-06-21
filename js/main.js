@@ -184,6 +184,17 @@ function updateMetricCards(rows) {
   } else {
     setCard('fear', '—', 'Awaiting data', 'neutral');
   }
+
+  // MVRV Z-Score
+  const latestMvrv = findLatest('mvrvZ');
+  if (latestMvrv) {
+    const v = latestMvrv.mvrvZ;
+    setCard('mvrvz', fmt(v, 2),
+      v < 0.1 ? 'Undervalued' : v > 7 ? 'Overheated' : v > 4 ? 'Elevated' : 'Neutral',
+      v < 0.1 ? 'buy' : v > 7 ? 'sell' : v > 4 ? 'caution' : 'neutral');
+  } else {
+    setCard('mvrvz', '—', 'Awaiting data', 'neutral');
+  }
 }
 
 function setCard(id, value, detail, signal) {
@@ -210,7 +221,7 @@ function updateHalving(info) {
 /*  Current normalized inputs (most recent value per metric)                */
 /* ════════════════════════════════════════════════════════════════════════ */
 function buildCurrentInputs(rows) {
-  const keys = ['ma200w', 'mayer', 'logRegr', 'rsi', 'puell', 'fearGreed'];
+  const keys = ['ma200w', 'mayer', 'logRegr', 'rsi', 'puell', 'fearGreed', 'mvrvZ'];
   const inp = {};
   for (const k of keys) {
     const r = [...rows].reverse().find(x =>
@@ -348,6 +359,7 @@ function renderSection(section) {
     case 'rsi':         ChartRenderers.rsi('chart-rsi', rows); break;
     case 'mayer':       ChartRenderers.mayer('chart-mayer', rows); break;
     case 'puell':       ChartRenderers.puell('chart-puell', rows); break;
+    case 'mvrvz':       ChartRenderers.mvrvz('chart-mvrvz', rows); break;
     case 'logregr':     ChartRenderers.logRegression('chart-logregr', rows, regression, residuals, State.scalePrefs.logregr); break;
     case 'picycle':     ChartRenderers.piCycle('chart-picycle', rows, State.scalePrefs.picycle); break;
     case 'risk':        ChartRenderers.risk('chart-risk', rows); break;
@@ -516,8 +528,11 @@ async function init() {
 
     setStatus('Loading sentiment data…');
 
-    // 3 — Fear & Greed (optional)
-    const fgData = await API.fetchFearGreed().catch(() => null);
+    // 3 — Fear & Greed + MVRV Z-Score (optional)
+    const [fgData, mvrvData] = await Promise.all([
+      API.fetchFearGreed().catch(() => null),
+      API.fetchMvrvZ().catch(() => null),
+    ]);
 
     // 4 — Current price snapshot (optional — for header; falls back to last historical row)
     const priceSnap = await API.fetchCurrentPrice().catch(() => null);
@@ -528,7 +543,7 @@ async function init() {
     setStatus('Computing metrics…');
 
     // Align & compute
-    const aligned = Calc.alignData(priceData, mcapData, revenueData, fgData);
+    const aligned = Calc.alignData(priceData, mcapData, revenueData, fgData, mvrvData);
     if (!aligned.length) {
       setStatus('No historical data returned — blockchain.info API may be unavailable.', true);
       showApp();

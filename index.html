@@ -74,6 +74,7 @@
     <button class="nav-btn" data-section="rsi">Weekly RSI</button>
     <button class="nav-btn" data-section="mayer">Mayer Multiple</button>
     <button class="nav-btn" data-section="puell">Puell Multiple</button>
+    <button class="nav-btn" data-section="mvrvz">MVRV Z-Score</button>
     <button class="nav-btn" data-section="logregr">Log Regression</button>
     <button class="nav-btn" data-section="picycle">Pi Cycle</button>
     <button class="nav-btn" data-section="risk">Risk &amp; DCA</button>
@@ -156,6 +157,11 @@
           <div class="card-value" id="card-val-fear">—</div>
           <div class="card-detail" id="card-detail-fear">Loading…</div>
         </div>
+        <div class="metric-card">
+          <div class="card-top"><span class="card-name">MVRV Z-Score</span><span class="card-dot neutral" id="card-dot-mvrvz"></span></div>
+          <div class="card-value" id="card-val-mvrvz">—</div>
+          <div class="card-detail" id="card-detail-mvrvz">Loading…</div>
+        </div>
       </div>
 
       <!-- Overview chart -->
@@ -223,7 +229,7 @@
       <div class="chart-wrap">
         <div class="chart-head">
           <div class="chart-title">Mayer Multiple</div>
-          <div class="chart-desc">Price ÷ 200-day moving average. A simple but reliable gauge of how stretched price is from its own trend. Below 0.6 has historically marked deep-bear accumulation zones; above 2.4 has coincided with cycle-top euphoria. Used here in place of MVRV Z-Score, which needs a "realized cap" series that no longer has a free, keyless, full-history source (see README) — Mayer Multiple targets a similar over/undervaluation signal using only price data.</div>
+          <div class="chart-desc">Price ÷ 200-day moving average. A simple but reliable gauge of how stretched price is from its own trend. Below 0.6 has historically marked deep-bear accumulation zones; above 2.4 has coincided with cycle-top euphoria. Used as a full-history complement to MVRV Z-Score, whose realized-cap data has no free, keyless, full-history source — the MVRV Z-Score tab adds a ~4-year free series, while Mayer targets the same over/undervaluation idea across all of history using only price data.</div>
         </div>
         <div class="chart-area"><canvas id="chart-mayer"></canvas></div>
         <div class="chart-legend">
@@ -246,6 +252,22 @@
           <div class="legend-item"><div class="legend-swatch" style="background:#ef444433;height:10px;width:20px"></div>Sell Zone &gt;4</div>
           <div class="legend-item"><div class="legend-swatch" style="background:#10b98133;height:10px;width:20px"></div>Buy Zone &lt;0.5</div>
           <div class="legend-item"><div class="legend-swatch" style="background:#8b5cf6"></div>Puell Multiple</div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ── MVRV Z-SCORE ───────────────────────────────────────────────── -->
+    <section id="sec-mvrvz" class="section">
+      <div class="chart-wrap">
+        <div class="chart-head">
+          <div class="chart-title">MVRV Z-Score</div>
+          <div class="chart-desc">Standardised gap between market cap and realized cap (the aggregate on-chain cost basis): (market − realized) ÷ std(market). Unlike the price-derived metrics, it's a genuinely on-chain valuation signal. Readings above ~7 have marked cycle tops; below ~0.1 have marked bottoms. Sourced precomputed from bitcoin-data.com — keyless but only ~4 years of free history, so earlier dates are blank and it contributes to the risk score only where available.</div>
+        </div>
+        <div class="chart-area"><canvas id="chart-mvrvz"></canvas></div>
+        <div class="chart-legend">
+          <div class="legend-item"><div class="legend-swatch" style="background:#ef444433;height:10px;width:20px"></div>Overbought &gt;7</div>
+          <div class="legend-item"><div class="legend-swatch" style="background:#10b98133;height:10px;width:20px"></div>Oversold &lt;0.1</div>
+          <div class="legend-item"><div class="legend-swatch" style="background:#8b5cf6"></div>MVRV Z-Score</div>
         </div>
       </div>
     </section>
@@ -496,12 +518,12 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/chartjs-plugin-annotation/3.0.1/chartjs-plugin-annotation.min.js"></script>
 
 <!-- App -->
-<script src="js/config.js"></script>
-<script src="js/api.js"></script>
-<script src="js/calculations.js"></script>
-<script src="js/backtest.js"></script>
-<script src="js/charts.js"></script>
-<script src="js/main.js"></script>
+<script src="js/config.js?v=2"></script>
+<script src="js/api.js?v=2"></script>
+<script src="js/calculations.js?v=2"></script>
+<script src="js/backtest.js?v=2"></script>
+<script src="js/charts.js?v=2"></script>
+<script src="js/main.js?v=2"></script>
 
 </body>
 </html>

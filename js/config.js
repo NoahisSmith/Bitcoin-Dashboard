@@ -41,7 +41,7 @@ const CONFIG = {
   // dominate. Each category score is the mean of its available metric inputs,
   // then categories are combined by these weights. Tune via the backtester.
   RISK_CATEGORIES: {
-    valuation: { weight: 0.45, metrics: ['ma200w', 'mayer', 'logRegr'] },
+    valuation: { weight: 0.45, metrics: ['ma200w', 'mayer', 'logRegr', 'mvrvZ'] },
     momentum:  { weight: 0.20, metrics: ['rsi'] },
     miner:     { weight: 0.20, metrics: ['puell'] },
     sentiment: { weight: 0.15, metrics: ['fearGreed'] },
@@ -65,6 +65,7 @@ const CONFIG = {
     puell:     { min: 0.3,   max: 4.0  },   // Puell Multiple
     logRegr:   { min: 0,     max: 1    },   // percentile (0–1)
     fearGreed: { min: 5,     max: 95   },   // F&G Index (0–100)
+    mvrvZ:     { min: 0,     max: 7    },   // MVRV Z-Score (≈0 bottoms, ≈7 tops)
   },
 
   // DCA allocation table keyed by risk score floor.
