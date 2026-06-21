@@ -76,6 +76,56 @@ const Calc = {
     return { a, b, residuals };
   },
 
+  /* ── OLS power-law line through a small set of points ────────────────── */
+  // pts: [{ days, price }] → { a, b } for log10(price) = a + b·log10(days).
+  _olsLogLine(pts) {
+    const valid = pts.filter(p => p && p.days > 1 && p.price > 0);
+    const n = valid.length;
+    if (n < 2) return null;
+    const xs = valid.map(p => Math.log10(p.days));
+    const ys = valid.map(p => Math.log10(p.price));
+    const mx = xs.reduce((s, x) => s + x, 0) / n;
+    const my = ys.reduce((s, y) => s + y, 0) / n;
+    let num = 0, den = 0;
+    for (let i = 0; i < n; i++) { num += (xs[i] - mx) * (ys[i] - my); den += (xs[i] - mx) ** 2; }
+    const b = den === 0 ? 0 : num / den;
+    return { a: my - b * mx, b };
+  },
+
+  /* ── Asymmetric power-law fan anchored to cycle extremes ─────────────── */
+  // Lower "support" line fit through the major capitulation lows and an upper
+  // "resistance" line through the cycle tops, each with its own slope (so the
+  // fan converges/diverges), plus the central power-law as the median.
+  // NOTE: this is fit to KNOWN past extremes — descriptive, not predictive, and
+  // intentionally NOT used by the (walk-forward) risk score.
+  anchoredFan(rows, regression) {
+    const g = CONFIG.GENESIS.getTime();
+    const pick = (startStr, endStr, type) => {
+      let best = null;
+      for (const r of rows) {
+        if (!r.price || r.price <= 0 || r.dateStr < startStr || r.dateStr > endStr) continue;
+        if (!best || (type === 'min' ? r.price < best.price : r.price > best.price)) best = r;
+      }
+      return best;
+    };
+    const toPt = r => r && ({ days: (r.date.getTime() - g) / 86400000, price: r.price });
+
+    // Capitulation lows (Aug 2010, Aug 2015, Mar 2020, Nov 2022) — min daily close in window
+    const lowWins  = [['2010-07-01','2010-10-31'],['2015-07-01','2015-09-30'],['2020-03-01','2020-04-15'],['2022-10-15','2022-12-31']];
+    // Cycle tops (2011, 2013, 2017, 2021) — max daily close in window
+    const highWins = [['2011-05-15','2011-07-15'],['2013-11-15','2014-01-15'],['2017-12-01','2018-01-15'],['2021-10-15','2021-12-15']];
+
+    const lowPts  = lowWins.map(([a, b]) => toPt(pick(a, b, 'min'))).filter(Boolean);
+    const highPts = highWins.map(([a, b]) => toPt(pick(a, b, 'max'))).filter(Boolean);
+
+    return {
+      lower:  this._olsLogLine(lowPts),
+      median: { a: regression.a, b: regression.b },
+      upper:  this._olsLogLine(highPts),
+      lowPoints: lowPts, highPoints: highPts,
+    };
+  },
+
   /* ── Price at quantile for a given date ─────────────────────────────── */
   regrPriceAtQuantile(dateMs, regression, quantileOffset) {
     const days = (dateMs - CONFIG.GENESIS.getTime()) / 86400000;
@@ -452,6 +502,9 @@ const Calc = {
     // Risk score series (walk-forward, lookahead-free).
     this.applyScores(rows);
 
-    return { rows, regression, residuals: sortedRes };
+    // Asymmetric anchored fan (visual only — not used by the score).
+    const fan = this.anchoredFan(rows, regression);
+
+    return { rows, regression, residuals: sortedRes, fan };
   },
 };

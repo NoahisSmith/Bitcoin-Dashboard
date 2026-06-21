@@ -72,15 +72,24 @@ const Backtest = {
   irr(contributions, finalValue, ppy) {
     const cf = contributions.map(x => -x);
     cf[cf.length - 1] += finalValue;
-    const npv = rate => cf.reduce((s, x, t) => s + x / Math.pow(1 + rate, t), 0);
-    let lo = -0.9999, hi = 1, flo = npv(lo), fhi = npv(hi), tries = 0;
-    while (flo * fhi > 0 && hi < 1e6 && tries < 80) { hi *= 1.5; fhi = npv(hi); tries++; }
-    if (flo * fhi > 0) return null;
+    const npv = rate => {
+      let s = 0;
+      for (let t = 0; t < cf.length; t++) s += cf[t] / Math.pow(1 + rate, t);
+      return s;
+    };
+    // Bracket the weekly rate in a finite, overflow-safe range. Going closer to
+    // −1 makes the discount factors over ~100+ periods overflow/underflow and
+    // mix ±Infinity into NaN, which would silently break the bisection. This
+    // range spans roughly −100%/yr to enormous positive annualized returns.
+    let lo = -0.5, hi = 1, flo = npv(lo), fhi = npv(hi);
+    if (!isFinite(flo) || !isFinite(fhi) || flo * fhi > 0) return null;
     for (let i = 0; i < 200; i++) {
       const mid = (lo + hi) / 2, fm = npv(mid);
+      if (!isFinite(fm)) return null;
       if (flo * fm <= 0) { hi = mid; } else { lo = mid; flo = fm; }
     }
-    return Math.pow(1 + (lo + hi) / 2, ppy) - 1;
+    const ann = Math.pow(1 + (lo + hi) / 2, ppy) - 1;
+    return isFinite(ann) ? ann : null;
   },
 
   // Per-strategy risk/return metrics from its value (V) & contribution (C)

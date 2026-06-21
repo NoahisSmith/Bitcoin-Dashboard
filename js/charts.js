@@ -324,37 +324,73 @@ const ChartRenderers = {
     });
   },
 
-  /* ── Logarithmic Regression + Quantile Fan ───────────────────────────── */
+  /* ── Logarithmic Regression trend (+ ±1σ band) ───────────────────────── */
   logRegression(canvasId, rows, regression, residuals, scaleType = 'log') {
     destroyChart(canvasId);
     const pts = thin(rows.filter(r => r.price && r.logRegrPred));
     const opts = baseOptions(scaleType === 'log', 'USD');
 
-    const quantileOffsets = CONFIG.QUANTILE_BANDS.map(q => Calc.quantile(residuals, q));
-    const bandColors = ['#10b981', '#34d399', '#f7931a', '#f97316', '#ef4444'];
-    const bandLabels = ['10th %ile', '25th %ile', 'Median (50th)', '75th %ile', '90th %ile'];
+    // 1σ of the (log-space) residuals → a symmetric band around the trend.
+    const mean  = residuals.reduce((s, x) => s + x, 0) / residuals.length;
+    const sigma = Math.sqrt(residuals.reduce((s, x) => s + (x - mean) ** 2, 0) / residuals.length);
+    const g = CONFIG.GENESIS.getTime();
+    const lineAt = (off, dateMs) => {
+      const days = (dateMs - g) / 86400000;
+      if (days <= 1) return null;
+      return Math.pow(10, regression.a + regression.b * Math.log10(days) + off);
+    };
 
     const datasets = [
-      {
-        label: 'BTC Price', _fmt: 'USD',
-        data: pts.map(r => r.price),
-        borderColor: CONFIG.C.btc, borderWidth: 1.5, fill: false, tension: 0,
-        order: 0,
-      },
-      ...quantileOffsets.map((offset, qi) => ({
-        label: bandLabels[qi], _fmt: 'USD',
-        data: pts.map(r => {
-          const days = (r.date.getTime() - CONFIG.GENESIS.getTime()) / 86400000;
-          if (days <= 1) return null;
-          return Math.pow(10, regression.a + regression.b * Math.log10(days) + offset);
-        }),
-        borderColor: bandColors[qi],
-        borderWidth: qi === 2 ? 1.5 : 1,
-        borderDash:  qi === 2 ? [] : [5, 3],
-        fill: qi > 0 ? '-1' : false,
-        backgroundColor: bandColors[qi] + '0a',
-        tension: 0,
-        order: qi + 1,
+      { label: 'BTC Price', _fmt: 'USD', data: pts.map(r => r.price),
+        borderColor: CONFIG.C.btc, borderWidth: 1.5, fill: false, tension: 0 },
+      { label: 'Power-law trend', _fmt: 'USD', data: pts.map(r => lineAt(0, r.date.getTime())),
+        borderColor: CONFIG.C.yellow, borderWidth: 1.5, fill: false, tension: 0 },
+      { label: '+1σ', _fmt: 'USD', data: pts.map(r => lineAt(sigma, r.date.getTime())),
+        borderColor: '#ef444488', borderWidth: 1, borderDash: [5, 3], fill: false, tension: 0 },
+      { label: '−1σ', _fmt: 'USD', data: pts.map(r => lineAt(-sigma, r.date.getTime())),
+        borderColor: '#10b98188', borderWidth: 1, borderDash: [5, 3], fill: '-1',
+        backgroundColor: '#f7931a08', tension: 0 },
+    ];
+
+    CHARTS[canvasId] = new Chart(document.getElementById(canvasId), {
+      type: 'line',
+      data: { labels: pts.map(r => r.date), datasets },
+      options: { ...opts, plugins: { ...opts.plugins, legend: { display: true, labels: { color: '#8891a8', boxWidth: 20, font: { size: 10 } } } } },
+    });
+  },
+
+  /* ── Asymmetric Power-Law Fan (anchored to cycle extremes) ───────────── */
+  fan(canvasId, rows, fan, scaleType = 'log') {
+    destroyChart(canvasId);
+    if (!fan || !fan.lower || !fan.upper) { showNoData(canvasId, 'Fan model unavailable'); return; }
+    const pts = thin(rows.filter(r => r.price));
+    const opts = baseOptions(scaleType === 'log', 'USD');
+    const g = CONFIG.GENESIS.getTime();
+
+    const lineAt = (line, dateMs) => {
+      const days = (dateMs - g) / 86400000;
+      if (days <= 1) return null;
+      return Math.pow(10, line.a + line.b * Math.log10(days));
+    };
+    const blend = (l1, l2, t) => ({ a: (1 - t) * l1.a + t * l2.a, b: (1 - t) * l1.b + t * l2.b });
+
+    const bands = [
+      { label: 'Support (cycle lows)',     line: fan.lower,                       color: '#10b981', dash: [] },
+      { label: 'Lower-mid',                line: blend(fan.lower, fan.median, 0.5), color: '#34d399', dash: [5, 3] },
+      { label: 'Median (power law)',       line: fan.median,                      color: '#f7931a', dash: [] },
+      { label: 'Upper-mid',                line: blend(fan.median, fan.upper, 0.5), color: '#f97316', dash: [5, 3] },
+      { label: 'Resistance (cycle tops)',  line: fan.upper,                       color: '#ef4444', dash: [] },
+    ];
+
+    const datasets = [
+      { label: 'BTC Price', _fmt: 'USD', data: pts.map(r => r.price),
+        borderColor: CONFIG.C.btc, borderWidth: 1.5, fill: false, tension: 0, order: 0 },
+      ...bands.map((bnd, i) => ({
+        label: bnd.label, _fmt: 'USD',
+        data: pts.map(r => lineAt(bnd.line, r.date.getTime())),
+        borderColor: bnd.color, borderWidth: i === 2 ? 1.5 : 1, borderDash: bnd.dash,
+        fill: i > 0 ? '-1' : false, backgroundColor: bnd.color + '0a',
+        tension: 0, order: i + 1,
       })),
     ];
 

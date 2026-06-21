@@ -16,6 +16,7 @@ const State = {
     overview: 'log',
     ma200w:   'log',
     logregr:  'log',
+    fan:      'log',
     picycle:  'log',
     backtest: 'log',
   },
@@ -361,6 +362,7 @@ function renderSection(section) {
     case 'puell':       ChartRenderers.puell('chart-puell', rows); break;
     case 'mvrvz':       ChartRenderers.mvrvz('chart-mvrvz', rows); break;
     case 'logregr':     ChartRenderers.logRegression('chart-logregr', rows, regression, residuals, State.scalePrefs.logregr); break;
+    case 'fan':         ChartRenderers.fan('chart-fan', rows, State.fan, State.scalePrefs.fan); break;
     case 'picycle':     ChartRenderers.piCycle('chart-picycle', rows, State.scalePrefs.picycle); break;
     case 'risk':        ChartRenderers.risk('chart-risk', rows); break;
     case 'backtest':    renderBacktest(); break;
@@ -460,6 +462,7 @@ function rerenderChart(chartKey) {
     case 'overview': ChartRenderers.overview('chart-overview', rows, scale); break;
     case 'ma200w':   ChartRenderers.ma200w('chart-ma200w', rows, scale); break;
     case 'logregr':  ChartRenderers.logRegression('chart-logregr', rows, regression, residuals, scale); break;
+    case 'fan':      ChartRenderers.fan('chart-fan', rows, State.fan, scale); break;
     case 'picycle':  ChartRenderers.piCycle('chart-picycle', rows, scale); break;
     case 'backtest': ChartRenderers.backtest('chart-backtest', State.lastBacktest, scale); break;
   }
@@ -549,11 +552,12 @@ async function init() {
       showApp();
       return;
     }
-    const { rows, regression, residuals } = Calc.computeAll(aligned);
+    const { rows, regression, residuals, fan } = Calc.computeAll(aligned);
 
     State.rows       = rows;
     State.regression = regression;
     State.residuals  = residuals;
+    State.fan        = fan;
 
     // Live risk: take the most recent available normalized input for EACH
     // metric (weekly RSI and Puell don't update every day) and score that, so

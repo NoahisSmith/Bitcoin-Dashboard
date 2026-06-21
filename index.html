@@ -76,6 +76,7 @@
     <button class="nav-btn" data-section="puell">Puell Multiple</button>
     <button class="nav-btn" data-section="mvrvz">MVRV Z-Score</button>
     <button class="nav-btn" data-section="logregr">Log Regression</button>
+    <button class="nav-btn" data-section="fan">Power-Law Fan</button>
     <button class="nav-btn" data-section="picycle">Pi Cycle</button>
     <button class="nav-btn" data-section="risk">Risk &amp; DCA</button>
     <button class="nav-btn" data-section="backtest">Backtest</button>
@@ -277,22 +278,42 @@
       <div class="chart-wrap">
         <div class="chart-head">
           <div class="chart-head-row">
-            <div class="chart-title">Logarithmic Regression + Quantile Fan</div>
+            <div class="chart-title">Logarithmic Regression</div>
             <div class="scale-toggle" data-chart="logregr">
               <button class="scale-btn active" data-scale="log">LOG</button>
               <button class="scale-btn" data-scale="linear">LIN</button>
             </div>
           </div>
-          <div class="chart-desc">Power-law regression fit on log₁₀(price) vs log₁₀(days since genesis). Quantile bands show the 10th, 25th, 50th, 75th, and 90th percentile of historical price relative to regression. Price near the 90th percentile = historically overvalued. Near the 10th = historically undervalued.</div>
+          <div class="chart-desc">The central power-law trend: an OLS fit of log₁₀(price) vs log₁₀(days since genesis), with a ±1σ band (one standard deviation of the log-space residuals). Price above the trend is rich, below is cheap, relative to its long-run growth curve. This same fit (computed walk-forward) drives the log-regression input to the risk score. For an asymmetric over/undervaluation envelope, see the Power-Law Fan tab.</div>
         </div>
         <div class="chart-area"><canvas id="chart-logregr"></canvas></div>
         <div class="chart-legend">
           <div class="legend-item"><div class="legend-swatch" style="background:#f7931a"></div>BTC Price</div>
-          <div class="legend-item"><div class="legend-swatch" style="background:#10b981"></div>10th %ile</div>
-          <div class="legend-item"><div class="legend-swatch" style="background:#34d399"></div>25th %ile</div>
-          <div class="legend-item"><div class="legend-swatch" style="background:#f7931a"></div>Median</div>
-          <div class="legend-item"><div class="legend-swatch" style="background:#f97316"></div>75th %ile</div>
-          <div class="legend-item"><div class="legend-swatch" style="background:#ef4444"></div>90th %ile</div>
+          <div class="legend-item"><div class="legend-swatch" style="background:#f59e0b"></div>Power-law trend</div>
+          <div class="legend-item"><div class="legend-swatch" style="background:#ef444488"></div>+1σ</div>
+          <div class="legend-item"><div class="legend-swatch" style="background:#10b98188"></div>−1σ</div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ── POWER-LAW FAN ──────────────────────────────────────────────── -->
+    <section id="sec-fan" class="section">
+      <div class="chart-wrap">
+        <div class="chart-head">
+          <div class="chart-head-row">
+            <div class="chart-title">Asymmetric Power-Law Fan</div>
+            <div class="scale-toggle" data-chart="fan">
+              <button class="scale-btn active" data-scale="log">LOG</button>
+              <button class="scale-btn" data-scale="linear">LIN</button>
+            </div>
+          </div>
+          <div class="chart-desc">An asymmetric valuation envelope: the <strong>support</strong> line is fit through the major capitulation lows (Aug 2010, Aug 2015, Mar 2020, Nov 2022) and the <strong>resistance</strong> line through the cycle tops (2011, 2013, 2017, 2021), each with its own slope — so the fan converges as Bitcoin's volatility compresses. The median is the power-law trend. <em>Caveat:</em> these edges are fit to known past extremes on daily closes (not intraday wicks) — they describe where price has historically turned, they do not predict it, and they are deliberately <strong>not</strong> used by the risk score.</div>
+        </div>
+        <div class="chart-area"><canvas id="chart-fan"></canvas></div>
+        <div class="chart-legend">
+          <div class="legend-item"><div class="legend-swatch" style="background:#10b981"></div>Support (cycle lows)</div>
+          <div class="legend-item"><div class="legend-swatch" style="background:#f7931a"></div>Median (power law)</div>
+          <div class="legend-item"><div class="legend-swatch" style="background:#ef4444"></div>Resistance (cycle tops)</div>
         </div>
       </div>
     </section>
@@ -518,12 +539,12 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/chartjs-plugin-annotation/3.0.1/chartjs-plugin-annotation.min.js"></script>
 
 <!-- App -->
-<script src="js/config.js?v=2"></script>
-<script src="js/api.js?v=2"></script>
-<script src="js/calculations.js?v=2"></script>
-<script src="js/backtest.js?v=2"></script>
-<script src="js/charts.js?v=2"></script>
-<script src="js/main.js?v=2"></script>
+<script src="js/config.js?v=4"></script>
+<script src="js/api.js?v=4"></script>
+<script src="js/calculations.js?v=4"></script>
+<script src="js/backtest.js?v=4"></script>
+<script src="js/charts.js?v=4"></script>
+<script src="js/main.js?v=4"></script>
 
 </body>
 </html>
