@@ -9,7 +9,7 @@ const State = {
   residuals:  [],
   currentPrice: null,
   currentRisk:  null,
-  halfingInfo:  null,
+  halvingInfo:  null,
   currentSection: 'dashboard',
   // Per-chart linear/log scale preference for the four price-based charts
   scalePrefs: {

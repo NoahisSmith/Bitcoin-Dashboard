@@ -84,9 +84,6 @@ const CONFIG = {
     { min: 9,  max: 10, label: 'Strong Sell',  action: 'Trim ~20%',           alloc: '−20%', color: '#b91c1c' },
   ],
 
-  // Log-regression quantile bands to draw
-  QUANTILE_BANDS: [0.10, 0.25, 0.50, 0.75, 0.90],
-
   // Chart color palette
   C: {
     btc:    '#f7931a',

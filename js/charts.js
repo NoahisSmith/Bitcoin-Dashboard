@@ -19,6 +19,12 @@ const CHARTS = {};  // registry so we can destroy before recreating
 
 function destroyChart(id) {
   if (CHARTS[id]) { CHARTS[id].destroy(); delete CHARTS[id]; }
+  // Undo a prior showNoData(): restore the canvas and drop the placeholder,
+  // so a chart recovers when data reappears (e.g. widening the date range).
+  const canvas = document.getElementById(id);
+  if (canvas && canvas.style.display === 'none') canvas.style.display = '';
+  const ph = canvas?.parentElement?.querySelector('.no-data');
+  if (ph) ph.remove();
 }
 
 /* ── Shared chart options ──────────────────────────────────────────────── */
@@ -483,15 +489,10 @@ const ChartRenderers = {
 
   /* ── Backtest: portfolio value, Plain DCA vs Score-Weighted ──────────── */
   backtest(canvasId, result, scaleType = 'log') {
-    destroyChart(canvasId);
+    destroyChart(canvasId);   // also restores the canvas after a prior no-data state
     if (!result || !result.series.length) { showNoData(canvasId, 'No data in selected range'); return; }
 
     const canvas = document.getElementById(canvasId);
-    if (canvas) canvas.style.display = '';   // un-hide if a prior run showed no-data
-    const parent = canvas?.parentElement;
-    const ph = parent?.querySelector('.no-data');
-    if (ph) ph.remove();
-
     const pts  = thin(result.series, 2000);
     const opts = baseOptions(scaleType === 'log', 'USD');
 

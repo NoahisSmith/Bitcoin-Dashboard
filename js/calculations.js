@@ -126,23 +126,6 @@ const Calc = {
     };
   },
 
-  /* ── Price at quantile for a given date ─────────────────────────────── */
-  regrPriceAtQuantile(dateMs, regression, quantileOffset) {
-    const days = (dateMs - CONFIG.GENESIS.getTime()) / 86400000;
-    if (days <= 1) return null;
-    return Math.pow(10, regression.a + regression.b * Math.log10(days) + quantileOffset);
-  },
-
-  /* ── Quantile of a sorted array ─────────────────────────────────────── */
-  quantile(arr, q) {
-    const s = [...arr].sort((a, b) => a - b);
-    const pos = (s.length - 1) * q;
-    const lo  = Math.floor(pos);
-    return s[lo + 1] !== undefined
-      ? s[lo] + (pos - lo) * (s[lo + 1] - s[lo])
-      : s[lo];
-  },
-
   /* ── Mayer Multiple ─────────────────────────────────────────────────── */
   // price / 200-day SMA. Free-data-derivable cycle indicator used here in
   // place of MVRV Z-Score: true MVRV needs a "realized cap" series (price
